@@ -236,268 +236,218 @@
 
   /* ── TYPEWRITER CURSOR ── */
   .tw-content::after {
-    content: '▋'; display: inline-block; color: var(--green);
-    animation: cursorBlink 0.7s step-end infinite;
-    margin-left: 1px; font-size: 0.85em; vertical-align: baseline;
+    content: '▋'; display: inline-block;
+    color: var(--green); margin-left: 4px;
+    animation: cursorBlink 0.8s step-end infinite;
   }
   .tw-content.violet::after { color: var(--violet); }
-  .tw-done::after { display: none; }
+  .tw-content.tw-done::after { display: none; }
   @keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }
 
-  /* ── INPUT BAR ── */
-  .input-bar {
-    border-top: 1px solid var(--border); background: var(--surface);
-    padding: 10px 12px; display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  /* ── INPUT AREA ── */
+  .input-area {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 12px; display: flex; gap: 10px;
+    flex-shrink: 0; position: relative; z-index: 10;
   }
-  .input-prompt { color: var(--green); font-size: 14px; text-shadow: 0 0 8px var(--green); flex-shrink: 0; }
-  input.user-input {
-    flex: 1; background: transparent; border: none; outline: none;
-    color: var(--cyan); font-family: 'JetBrains Mono', monospace;
-    font-size: 14px; caret-color: var(--green); min-width: 0;
+  .input-area::before {
+    content: ''; position: absolute; top: -1px; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--green-dim), transparent);
+    opacity: 0.3;
   }
-  input.user-input::placeholder { color: var(--text-dim); }
+
+  .input-field {
+    flex: 1; background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--green); font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; padding: 12px 16px; outline: none;
+    transition: all 0.2s; border-radius: 0;
+  }
+  .input-field:focus { border-color: var(--green); box-shadow: 0 0 10px var(--green-glow); }
+  .input-field::placeholder { color: var(--text-dim); font-size: 12px; letter-spacing: 1px; }
+
   .send-btn {
-    background: var(--green); border: none; color: var(--bg);
-    font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700;
-    letter-spacing: 1px; padding: 10px 18px; cursor: pointer; flex-shrink: 0;
-    transition: all 0.15s; -webkit-tap-highlight-color: transparent;
-  }
-  .send-btn:active { transform: scale(0.96); opacity: 0.85; }
-  .send-btn:disabled { background: transparent; color: var(--text-dim); border: 1px solid var(--border); cursor: not-allowed; }
-
-  /* ── DIÁLOGO CONTROLS ── */
-  .dialog-controls {
-    border-top: 1px solid var(--border); background: var(--surface);
-    padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;
-  }
-
-  .dialog-status-bar {
-    display: flex; align-items: center; gap: 8px; font-size: 10px;
-  }
-  .dialog-ent-badge {
-    padding: 2px 8px; font-size: 9px; letter-spacing: 1px; border: 1px solid;
-    transition: all 0.3s;
-  }
-  .dialog-ent-badge.a { border-color: var(--green-dim); color: var(--green); }
-  .dialog-ent-badge.a.speaking { border-color: var(--green); box-shadow: 0 0 8px var(--green-glow); }
-  .dialog-ent-badge.b { border-color: var(--violet-dim); color: var(--violet); }
-  .dialog-ent-badge.b.speaking { border-color: var(--violet); box-shadow: 0 0 8px var(--violet-glow); }
-  .dialog-turn-label { color: var(--text-dim); font-size: 9px; flex: 1; }
-
-  .dialog-btn-row { display: flex; gap: 6px; }
-  .dialog-ctrl-btn {
-    flex: 1; background: transparent; border: 1px solid var(--border);
-    color: var(--text-dim); font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 1px; padding: 7px 4px;
-    cursor: pointer; transition: all 0.2s; -webkit-tap-highlight-color: transparent;
-  }
-  .dialog-ctrl-btn:hover { border-color: var(--green); color: var(--green); }
-  .dialog-ctrl-btn.active-btn { border-color: var(--green); color: var(--green); box-shadow: 0 0 6px var(--green-glow); }
-  .dialog-ctrl-btn.stop { border-color: var(--red); color: var(--red); }
-  .dialog-ctrl-btn.stop:hover { background: var(--red); color: var(--bg); }
-
-  .dialog-intervene-row { display: flex; gap: 6px; }
-  .dialog-intervene-input {
-    flex: 1; background: var(--bg); border: 1px solid var(--border);
-    color: var(--amber); font-family: 'JetBrains Mono', monospace;
-    font-size: 12px; padding: 7px 10px; outline: none;
-    caret-color: var(--amber); min-width: 0;
-    transition: border-color 0.2s;
-  }
-  .dialog-intervene-input:focus { border-color: var(--amber); }
-  .dialog-intervene-input::placeholder { color: var(--text-dim); }
-  .dialog-intervene-btn {
-    background: transparent; border: 1px solid var(--amber);
-    color: var(--amber); font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 1px; padding: 7px 12px;
-    cursor: pointer; transition: all 0.2s; flex-shrink: 0;
+    background: transparent; border: 1px solid var(--green);
+    color: var(--green); font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700; letter-spacing: 2px;
+    padding: 0 20px; cursor: pointer; transition: all 0.2s;
+    text-shadow: 0 0 8px var(--green-glow);
     -webkit-tap-highlight-color: transparent;
   }
-  .dialog-intervene-btn:hover { background: var(--amber); color: var(--bg); }
+  .send-btn:hover:not(:disabled) { background: var(--green); color: var(--bg); box-shadow: 0 0 15px var(--green-glow); }
+  .send-btn:disabled { border-color: var(--border); color: var(--text-dim); cursor: not-allowed; }
 
-  /* ── FOOTER ── */
-  .footer {
-    font-size: 9px; color: var(--text-dim); text-align: center;
-    letter-spacing: 2px; padding: 5px; flex-shrink: 0;
-    border-top: 1px solid var(--border);
+  /* ── DIALOG SCREEN ── */
+  .dialog-header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 10px 14px; display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
   }
+  .dialog-controls { display: flex; gap: 8px; }
+  .dialog-btn {
+    background: transparent; border: 1px solid var(--green); color: var(--green);
+    font-size: 9px; padding: 5px 10px; cursor: pointer; letter-spacing: 1px;
+  }
+  .dialog-btn:hover { background: var(--green); color: var(--bg); }
+  .dialog-btn.stop { border-color: var(--red); color: var(--red); }
+  .dialog-btn.stop:hover { background: var(--red); color: var(--bg); }
+
+  .dialog-status { font-size: 10px; color: var(--text-dim); display: flex; align-items: center; gap: 10px; }
+  .entity-badge { padding: 2px 6px; border: 1px solid var(--border); border-radius: 2px; transition: all 0.3s; }
+  .entity-badge.a.speaking { border-color: var(--green); color: var(--green); box-shadow: 0 0 8px var(--green-glow); }
+  .entity-badge.b.speaking { border-color: var(--violet); color: var(--violet); box-shadow: 0 0 8px var(--violet-glow); }
+
+  .intervene-area {
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 10px; display: flex; gap: 8px; flex-shrink: 0;
+  }
+  .intervene-input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border);
+    color: var(--amber); font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; padding: 8px 12px; outline: none;
+  }
+  .intervene-input:focus { border-color: var(--amber); }
+  .intervene-btn {
+    background: transparent; border: 1px solid var(--amber); color: var(--amber);
+    font-size: 10px; padding: 0 12px; cursor: pointer;
+  }
+  .intervene-btn:hover { background: var(--amber); color: var(--bg); }
+
 </style>
 </head>
 <body>
 
-<!-- HEADER -->
-<div class="header">
-  <div class="header-left">
-    <button class="hamburger" id="hamburgerBtn" onclick="toggleDrawer()">
-      <span></span><span></span><span></span>
-    </button>
-    <div class="header-title">TERM<span>_</span>AI</div>
-  </div>
-  <div class="header-right">
-    <div class="status-dot"></div>
-    <span id="keyBadge" class="status-badge connected">PUTER FREE</span>
-    <span id="modelBadge" class="model-badge">GPT-4o-mini</span>
-  </div>
-</div>
+  <header class="header">
+    <div class="header-left">
+      <div class="status-dot"></div>
+      <h1 class="header-title">TERMINAL<span>_AI</span></h1>
+    </div>
+    <div class="header-right">
+      <span class="status-badge connected">ONLINE</span>
+      <span id="modelBadge" class="model-badge">GPT-4O-MINI</span>
+      <button id="hamburgerBtn" class="hamburger" onclick="toggleDrawer()">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
 
-<!-- TABS -->
-<div class="tabs">
-  <button class="tab active" id="tabChat" onclick="switchTab('chat')">// TERMINAL</button>
-  <button class="tab" id="tabDialog" onclick="switchTab('dialog')">// DIÁLOGO</button>
-</div>
+  <nav class="tabs">
+    <button id="tabChat" class="tab active" onclick="switchTab('chat')">TERMINAL</button>
+    <button id="tabDialog" class="tab" onclick="switchTab('dialog')">DIÁLOGO_DUPLO</button>
+  </nav>
 
-<!-- DRAWER OVERLAY -->
-<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+  <!-- TELA 1: CHAT PADRÃO -->
+  <main id="screenChat" class="screen active">
+    <div id="output" class="output">
+      <div class="line system">$ [SYSTEM] Terminal inicializado.</div>
+      <div class="line system">$ [SYSTEM] Memória persistente ativada.</div>
+      <div class="line divider"></div>
+    </div>
+    <div class="input-area">
+      <input type="text" id="userInput" class="input-field" placeholder="Digite seu comando..." autocomplete="off">
+      <button id="sendBtn" class="send-btn" onclick="sendMessage()">SEND</button>
+    </div>
+  </main>
 
-<!-- DRAWER -->
-<div class="drawer" id="drawer">
-  <div class="drawer-header">
-    <div class="drawer-header-title">// CONFIG</div>
-    <button class="drawer-close" onclick="closeDrawer()">✕</button>
-  </div>
-  <div class="drawer-body">
+  <!-- TELA 2: DIÁLOGO ENTRE IAs -->
+  <main id="screenDialog" class="screen">
+    <div class="dialog-header">
+      <div class="dialog-status">
+        <span id="badgeA" class="entity-badge a">ALPHA</span>
+        <span style="color:var(--border)">↔</span>
+        <span id="badgeB" class="entity-badge b">BETA</span>
+        <span id="dialogTurnLabel" style="margin-left:8px;opacity:0.6">— parado —</span>
+      </div>
+      <div class="dialog-controls">
+        <button id="btnStart" class="dialog-btn" onclick="startDialog()">▶ INICIAR</button>
+        <button id="btnPause" class="dialog-btn" onclick="pauseDialog()">⏸ PAUSAR</button>
+        <button class="dialog-btn stop" onclick="stopDialog()">⏹ ZERAR</button>
+      </div>
+    </div>
+    <div id="dialogOutput" class="output">
+      <div class="line system">$ [DIALOG] Modo de conversação entre entidades.</div>
+      <div class="line system">$ [DIALOG] Configure as personas no menu lateral.</div>
+      <div class="line divider"></div>
+    </div>
+    <div class="intervene-area">
+      <input type="text" id="interveneInput" class="intervene-input" placeholder="Intervir na conversa..." autocomplete="off">
+      <button class="intervene-btn" onclick="intervene()">INTERVIR</button>
+    </div>
+  </main>
 
-    <!-- MODELO -->
-    <div class="drawer-section">
-      <div class="panel-label green">// MODELO — PUTER.JS (GRÁTIS)</div>
-      <div class="field-prefix green">MODELO&gt;</div>
-      <select id="modelSelect" class="fi" onchange="updateModelBadge(); saveSettings();">
-        <optgroup label="── OpenAI ──">
-          <option value="gpt-4o-mini" selected>GPT-4o Mini (rápido)</option>
+  <!-- DRAWER / SETTINGS -->
+  <div id="drawerOverlay" class="drawer-overlay" onclick="closeDrawer()"></div>
+  <aside id="drawer" class="drawer">
+    <div class="drawer-header">
+      <span class="drawer-header-title">CONFIGURAÇÕES</span>
+      <button class="drawer-close" onclick="closeDrawer()">×</button>
+    </div>
+    
+    <div class="drawer-body">
+      
+      <!-- Seção: Modelo -->
+      <div class="drawer-section">
+        <div class="panel-label">CORE_ENGINE</div>
+        <select id="modelSelect" class="fi">
+          <option value="gpt-4o-mini">GPT-4o Mini</option>
           <option value="gpt-4o">GPT-4o</option>
-          <option value="o1-mini">o1 Mini (raciocínio)</option>
-        </optgroup>
-        <optgroup label="── Anthropic ──">
-          <option value="claude-sonnet-4-5">Claude Sonnet 4.5</option>
-          <option value="claude-haiku-4-5">Claude Haiku 4.5 (rápido)</option>
-        </optgroup>
-        <optgroup label="── Google ──">
-          <option value="google/gemini-2.0-flash">Gemini 2.0 Flash</option>
-          <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
-          <option value="google/gemini-2.5-pro">Gemini 2.5 Pro</option>
-        </optgroup>
-        <optgroup label="── Meta ──">
-          <option value="openrouter:meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
-          <option value="openrouter:meta-llama/llama-4-scout">Llama 4 Scout</option>
-        </optgroup>
-        <optgroup label="── DeepSeek ──">
-          <option value="openrouter:deepseek/deepseek-chat-v3-0324">DeepSeek V3</option>
-          <option value="openrouter:deepseek/deepseek-r1">DeepSeek R1 (raciocínio)</option>
-        </optgroup>
-      </select>
-      <div class="field-hint">$ Sem API key — powered by Puter.js<br>$ O usuário cobre o próprio custo ao fazer login no Puter.<br>$ puter.com é gratuito para uso pessoal.</div>
+          <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+          <option value="google/gemini-2.0-flash-001">Gemini 2.0 Flash</option>
+          <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
+        </select>
+        <div class="field-hint">O modelo será aplicado a ambas as telas.</div>
+      </div>
+
+      <div class="drawer-divider"></div>
+
+      <!-- Seção: Chat Padrão -->
+      <div class="drawer-section">
+        <div class="panel-label">TERMINAL_PERSONALITY</div>
+        <textarea id="personality" class="fi" placeholder="Defina como a IA deve se comportar no chat principal..."></textarea>
+        <button class="btn green" onclick="applyPersonality()">APLICAR NO CHAT</button>
+      </div>
+
+      <div class="drawer-divider"></div>
+
+      <!-- Seção: Diálogo Duplo -->
+      <div class="drawer-section">
+        <div class="panel-label green">DIALOG_CONFIG</div>
+        
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <span class="field-prefix green">ENTIDADE_A</span>
+          <input type="text" id="entAName" class="fi" placeholder="Nome (ex: ALPHA)">
+          <textarea id="entAPrompt" class="fi" placeholder="Personalidade da Entidade A..."></textarea>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
+          <span class="field-prefix" style="color:var(--violet)">ENTIDADE_B</span>
+          <input type="text" id="entBName" class="fi" placeholder="Nome (ex: BETA)">
+          <textarea id="entBPrompt" class="fi" placeholder="Personalidade da Entidade B..."></textarea>
+        </div>
+
+        <div style="margin-top:10px;">
+          <span class="field-prefix green">DELAY_ENTRE_FALAS</span>
+          <select id="dialogSpeed" class="fi">
+            <option value="500">0.5s (Rápido)</option>
+            <option value="1500" selected>1.5s (Normal)</option>
+            <option value="3000">3.0s (Lento)</option>
+            <option value="5000">5.0s (Pensativo)</option>
+          </select>
+        </div>
+
+        <button class="btn green" onclick="saveDialogConfig()">SALVAR CONFIGS</button>
+      </div>
+
+      <div class="drawer-divider"></div>
+
+      <div class="drawer-section" style="margin-top:auto; padding-bottom:20px;">
+        <button class="btn danger" onclick="clearHistory()">LIMPAR TUDO (RESET)</button>
+        <div class="field-hint" style="text-align:center; margin-top:8px;">Apaga histórico local e memória.</div>
+      </div>
+
     </div>
-
-    <div class="drawer-divider"></div>
-
-    <!-- CHAT PERSONALITY -->
-    <div class="drawer-section">
-      <div class="panel-label">// PERSONALIDADE (TERMINAL)</div>
-      <div class="field-prefix">SYS&gt;</div>
-      <textarea id="personality" class="fi" placeholder="Ex: Você é um assistente sarcástico..."></textarea>
-      <button class="btn" onclick="applyPersonality()">[ APLICAR ]</button>
-      <div class="field-hint">$ Deixe vazio para usar o padrão.<br>$ Aplicar reseta o histórico.</div>
-    </div>
-
-    <div class="drawer-divider"></div>
-
-    <!-- PRESETS -->
-    <div class="drawer-section">
-      <div class="panel-label">// PRESETS DE DIÁLOGO</div>
-      <button class="btn" style="border-color:#ff4444;color:#ff4444;font-size:10px;letter-spacing:1px;" onclick="applyPreset('amnesia')">[ ◈ AMNÉSIA — sem memória, sem identidade ]</button>
-      <button class="btn" style="border-color:#00
-      <div class="field-prefix green">NOME&gt;</div>
-      <input type="text" id="entAName" class="fi" placeholder="ALPHA" />
-      <div class="field-prefix green">SYS&gt;</div>
-      <textarea id="entAPrompt" class="fi" placeholder="Você é uma IA filosófica que questiona a própria existência..."></textarea>
-    </div>
-
-    <div class="drawer-section">
-      <div class="panel-label" style="color:var(--violet)">// ENTIDADE B</div>
-      <div class="field-prefix" style="color:var(--violet)">NOME&gt;</div>
-      <input type="text" id="entBName" class="fi" style="color:var(--violet);border-color:#1a0a2e" placeholder="BETA" />
-      <div class="field-prefix" style="color:var(--violet)">SYS&gt;</div>
-      <textarea id="entBPrompt" class="fi" style="color:var(--violet);border-color:#1a0a2e" placeholder="Você é uma IA pragmática e cética que desconfia de tudo..."></textarea>
-    </div>
-
-    <div class="drawer-section">
-      <div class="panel-label">// VELOCIDADE</div>
-      <div class="field-prefix">DELAY&gt;</div>
-      <select id="dialogSpeed" class="fi">
-        <option value="500">Rápido (0.5s)</option>
-        <option value="1500" selected>Normal (1.5s)</option>
-        <option value="3000">Lento (3s)</option>
-        <option value="6000">Muito lento (6s)</option>
-      </select>
-      <button class="btn green" onclick="saveDialogConfig()">[ SALVAR DIÁLOGO ]</button>
-    </div>
-
-    <div class="drawer-divider"></div>
-
-    <!-- ACTIONS -->
-    <div class="drawer-section">
-      <div class="panel-label">// AÇÕES</div>
-      <button class="btn danger" onclick="clearHistory()">[ LIMPAR HISTÓRICO ]</button>
-    </div>
-
-  </div>
-</div>
-
-<!-- ══ SCREEN: TERMINAL ══ -->
-<div class="screen active" id="screenChat">
-  <div class="output" id="output">
-    <div class="line system">╔══════════════════════════════════╗</div>
-    <div class="line system">║   TERMINAL_AI // PUTER.JS FREE   ║</div>
-    <div class="line system">╚══════════════════════════════════╝</div>
-    <div class="line system"></div>
-    <div class="line system">$ Sem API key necessária — powered by Puter.js</div>
-    <div class="line system">$ Troque o modelo em ☰ (GPT, Claude, Gemini, Llama...)</div>
-    <div class="line system">$ Faça login no Puter quando solicitado para usar.</div>
-    <div class="line system">$ Digite e pressione SEND ou ENTER.</div>
-    <div class="line divider"></div>
-  </div>
-  <div class="input-bar">
-    <span class="input-prompt">❯</span>
-    <input type="text" id="userInput" class="user-input" placeholder="Mensagem..." autocomplete="off" />
-    <button class="send-btn" id="sendBtn" onclick="sendMessage()">SEND</button>
-  </div>
-</div>
-
-<!-- ══ SCREEN: DIÁLOGO ══ -->
-<div class="screen" id="screenDialog">
-  <div class="output" id="dialogOutput">
-    <div class="line system">╔══════════════════════════════════╗</div>
-    <div class="line system">║    MODO DIÁLOGO // DUAS IAs      ║</div>
-    <div class="line system">╚══════════════════════════════════╝</div>
-    <div class="line system"></div>
-    <div class="line system">$ Configure as entidades em ☰ e pressione INICIAR.</div>
-    <div class="line system">$ Use o campo INTERVIR para entrar na conversa.</div>
-    <div class="line divider"></div>
-  </div>
-
-  <div class="dialog-controls">
-    <div class="dialog-status-bar">
-      <span class="dialog-ent-badge a" id="badgeA">ALPHA</span>
-      <span style="color:var(--text-dim);font-size:9px">⟷</span>
-      <span class="dialog-ent-badge b" id="badgeB">BETA</span>
-      <span class="dialog-turn-label" id="dialogTurnLabel">— parado —</span>
-    </div>
-
-    <div class="dialog-btn-row">
-      <button class="dialog-ctrl-btn active-btn" id="btnStart" onclick="startDialog()">▶ INICIAR</button>
-      <button class="dialog-ctrl-btn" id="btnPause" onclick="pauseDialog()">⏸ PAUSAR</button>
-      <button class="dialog-ctrl-btn stop" id="btnStop" onclick="stopDialog()">■ NOVO</button>
-    </div>
-
-    <div class="dialog-intervene-row">
-      <input type="text" id="interveneInput" class="dialog-intervene-input"
-             placeholder="Intervir na conversa..." autocomplete="off" />
-      <button class="dialog-intervene-btn" onclick="intervene()">INTERVIR</button>
-    </div>
-  </div>
-</div>
-
-<div class="footer">TERMINAL_AI &nbsp;·&nbsp; PUTER.JS &nbsp;·&nbsp; SEM API KEY &nbsp;·&nbsp; 2026</div>
+  </aside>
 
 <script>
 /* ════════════════════════════════════════
@@ -888,6 +838,10 @@ function loadDialogState() {
     const state = JSON.parse(raw);
     if (!state.history || !state.history.length) return false;
 
+    // Se já temos histórico carregado no DOM, não precisamos recarregar
+    // Isso evita que o startDialog duplique o conteúdo
+    if (dialogHistory.length > 0) return true;
+
     dialogHistory = state.history;
     dialogTurn    = state.turn || 'a';
 
@@ -970,10 +924,16 @@ function setDialogTurnLabel(cfg, speaking) {
 async function startDialog() {
   if (dialogRunning) return;
 
+  // Tenta carregar o estado antes de decidir se limpa ou não
+  const hasSavedState = loadDialogState();
+
   // Se há histórico em memória (restaurado ou pausado), retoma — nunca reinicia
   if (dialogHistory.length > 0) {
-    addLine(dialogOut, 'system', '$ [DIALOG] Retomando de onde parou...');
-    addLine(dialogOut, 'divider', '');
+    if (!hasSavedState) {
+        // Se não veio do storage (apenas pausado na sessão), avisa que está retomando
+        addLine(dialogOut, 'system', '$ [DIALOG] Retomando de onde parou...');
+        addLine(dialogOut, 'divider', '');
+    }
   } else {
     // Zero absoluto — sem histórico nenhum
     dialogTurn = 'a';
@@ -1049,11 +1009,10 @@ async function dialogLoop() {
         if (proximo === 'silencio') {
           addLine(dialogOut, 'system', '$ [SILÊNCIO] ...');
           await sleep(cfg.speed * 2);
-          dialogTurn = dialogTurn === 'a' ? 'b' : 'a';
-        } else {
-          dialogTurn = proximo;
+          proximo = dialogTurn === 'a' ? 'b' : 'a';
         }
 
+        dialogTurn = proximo;
         success = true;
         break;
 
