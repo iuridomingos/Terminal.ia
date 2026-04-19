@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>TERMINAL_AI // PUTER</title>
+<script src="https://js.puter.com/v2/"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap');
+
+  :root {
+    --green: #00ff88;
+    --green-dim: #00cc66;
+    --green-glow: rgba(0,255,136,0.15);
+    --amber: #ffaa00;
+    --amber-glow: rgba(255,170,0,0.15);
+    --violet: #cc66ff;
+    --violet-dim: #9944cc;
+    --violet-glow: rgba(204,102,255,0.15);
+    --red: #ff4444;
+    --cyan: #00ccff;
+    --bg: #050f0a;
+    --bg2: #081409;
+    --surface: #0a1f12;
+    --border: #0f3020;
+    --text-dim: #3a6b4a;
+    --scanline: rgba(0,255,136,0.03);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+
+  body {
+    background: var(--bg);
+    color: var(--green);
+    font-family: 'JetBrains Mono', monospace;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, var(--scanline) 2px, var(--scanline) 4px);
+    pointer-events: none;
+    z-index: 200;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 14px;
+    height: 52px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0; position: relative; z-index: 10; overflow: hidden;
+  }
+  .header::after {
+    content: '';
+    position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--green), transparent);
+    animation: scanH 4s linear infinite;
+  }
+  @keyframes scanH { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header-title { font-size: 16px; font-weight: 700; letter-spacing: 3px; text-shadow: 0 0 16px var(--green); }
+  .header-title span { color: var(--text-dim); }
+  .header-right { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--text-dim); }
+
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green); box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .status-badge {
+    font-size: 9px; padding: 2px 7px;
+    border: 1px solid var(--border); color: var(--text-dim);
+    letter-spacing: 1px; transition: all 0.3s; white-space: nowrap;
+  }
+  .status-badge.connected { border-color: var(--green); color: var(--green); box-shadow: 0 0 6px var(--green-glow); }
+  .model-badge { font-size: 9px; color: var(--text-dim); white-space: nowrap; max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex; flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+  }
+  .tab {
+    flex: 1; padding: 10px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 2px;
+    background: transparent; border: none;
+    color: var(--text-dim); cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tab.active { color: var(--green); border-bottom-color: var(--green); text-shadow: 0 0 8px var(--green); }
+  .tab:hover:not(.active) { color: var(--green-dim); }
+
+  /* ── HAMBURGER ── */
+  .hamburger {
+    background: transparent; border: 1px solid var(--border); color: var(--green);
+    width: 36px; height: 36px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 5px;
+    cursor: pointer; flex-shrink: 0; transition: border-color 0.2s, box-shadow 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .hamburger:hover, .hamburger.active { border-color: var(--green); box-shadow: 0 0 10px var(--green-glow); }
+  .hamburger span { display: block; width: 16px; height: 1.5px; background: var(--green); transition: all 0.3s ease; transform-origin: center; }
+  .hamburger.active span:nth-child(1) { transform: translateY(6.5px) rotate(45deg); }
+  .hamburger.active span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+  .hamburger.active span:nth-child(3) { transform: translateY(-6.5px) rotate(-45deg); }
+
+  /* ── DRAWER ── */
+  .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+  .drawer-overlay.open { opacity: 1; pointer-events: all; }
+  .drawer {
+    position: fixed; top: 0; right: 0; width: min(320px, 88vw); height: 100%;
+    background: var(--bg2); border-left: 1px solid var(--border);
+    z-index: 60; transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    display: flex; flex-direction: column; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer-header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 14px 16px; display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0; position: sticky; top: 0; z-index: 1;
+  }
+  .drawer-header-title { font-size: 10px; letter-spacing: 3px; color: var(--text-dim); }
+  .drawer-close {
+    background: transparent; border: 1px solid var(--border); color: var(--green);
+    width: 28px; height: 28px; cursor: pointer; font-size: 13px;
+    display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .drawer-close:hover { border-color: var(--green); }
+  .drawer-body { padding: 16px; display: flex; flex-direction: column; gap: 20px; flex: 1; }
+  .drawer-section { display: flex; flex-direction: column; gap: 10px; }
+  .panel-label {
+    font-size: 10px; letter-spacing: 2px; color: var(--amber);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel-label::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--amber), transparent); opacity: 0.4; }
+  .panel-label.green { color: var(--green); }
+  .panel-label.green::after { background: linear-gradient(90deg, var(--green), transparent); }
+  .field-prefix { font-size: 11px; color: var(--amber); letter-spacing: 1px; }
+  .field-prefix.green { color: var(--green); }
+  input.fi, textarea.fi, select.fi {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    color: var(--green); font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; padding: 10px 12px; outline: none;
+    transition: border-color 0.2s; -webkit-appearance: none; border-radius: 0;
+  }
+  textarea.fi { resize: vertical; min-height: 90px; max-height: 180px; line-height: 1.6; }
+  input.fi:focus, textarea.fi:focus, select.fi:focus { border-color: var(--green); }
+  input.fi::placeholder, textarea.fi::placeholder { color: var(--text-dim); }
+  select.fi option { background: var(--surface); color: var(--green); }
+  .btn {
+    width: 100%; background: transparent; border: 1px solid var(--amber);
+    color: var(--amber); font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 2px; padding: 11px;
+    cursor: pointer; transition: all 0.2s; -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { opacity: 0.8; }
+  .btn:hover { background: var(--amber); color: var(--bg); }
+  .btn.green { border-color: var(--green); color: var(--green); }
+  .btn.green:hover { background: var(--green); color: var(--bg); }
+  .btn.danger { border-color: var(--red); color: var(--red); }
+  .btn.danger:hover { background: var(--red); color: var(--bg); }
+  .field-hint { font-size: 10px; color: var(--text-dim); line-height: 1.7; }
+  .drawer-divider { border-top: 1px solid var(--border); }
+
+  /* ── SCREENS ── */
+  .screen { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  .screen.active { display: flex; }
+
+  /* ── CHAT OUTPUT ── */
+  .output {
+    flex: 1; overflow-y: auto; padding: 14px 12px 6px;
+    display: flex; flex-direction: column; gap: 3px;
+    scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
+  }
+  .output::-webkit-scrollbar { width: 3px; }
+  .output::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .line { font-size: 13px; line-height: 1.75; animation: fadeIn 0.15s ease; word-break: break-word; }
+  @media (max-width: 380px) { .line { font-size: 12px; } }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(3px)} to{opacity:1} }
+
+  .line.user { color: var(--cyan); }
+  .line.user .ps { color: var(--green); margin-right: 6px; text-shadow: 0 0 8px var(--green); }
+  .line.ai { color: var(--green); padding-left: 12px; border-left: 1px solid var(--border); margin-left: 2px; }
+  .line.ai .at { color: var(--green-dim); margin-right: 6px; font-size: 10px; }
+  .line.system { color: var(--text-dim); font-size: 11px; letter-spacing: 1px; }
+  .line.error { color: var(--red); font-size: 12px; }
+  .line.divider { border-top: 1px solid var(--border); margin: 4px 0; }
+
+  /* ── DIÁLOGO: entidades A e B ── */
+  .line.ent-a {
+    color: var(--green); padding-left: 12px;
+    border-left: 2px solid var(--green); margin-left: 2px;
+  }
+  .line.ent-a .at { color: var(--green-dim); margin-right: 6px; font-size: 10px; font-weight: 700; }
+
+  .line.ent-b {
+    color: var(--violet); padding-left: 12px;
+    border-left: 2px solid var(--violet-dim); margin-left: 2px;
+  }
+  .line.ent-b .at { color: var(--violet-dim); margin-right: 6px; font-size: 10px; font-weight: 700; }
+
+  .line.intervencao {
+    color: var(--amber); padding-left: 12px;
+    border-left: 2px solid var(--amber); margin-left: 2px;
+  }
+  .line.intervencao .at { color: var(--amber); margin-right: 6px; font-size: 10px; font-weight: 700; }
+
+  /* ── TYPING INDICATOR ── */
+  .typing { display: flex; align-items: center; gap: 8px; padding-left: 12px; }
+  .typing-dots span {
+    display: inline-block; width: 5px; height: 5px;
+    border-radius: 50%; background: var(--green-dim);
+    animation: blink 1.2s ease-in-out infinite;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,100%{opacity:0.2;transform:scale(0.8)} 50%{opacity:1;transform:scale(1)} }
+
+  .typing.violet .typing-dots span { background: var(--violet-dim); }
+
+  /* ── TYPEWRITER CURSOR ── */
+  .tw-content::after {
+    content: '▋'; display: inline-block; color: var(--green);
+    animation: cursorBlink 0.7s step-end infinite;
+    margin-left: 1px; font-size: 0.85em; vertical-align: baseline;
+  }
+  .tw-content.violet::after { color: var(--violet); }
+  .tw-done::after { display: none; }
+  @keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* ── INPUT BAR ── */
+  .input-bar {
+    border-top: 1px solid var(--border); background: var(--surface);
+    padding: 10px 12px; display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  }
+  .input-prompt { color: var(--green); font-size: 14px; text-shadow: 0 0 8px var(--green); flex-shrink: 0; }
+  input.user-input {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: var(--cyan); font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; caret-color: var(--green); min-width: 0;
+  }
+  input.user-input::placeholder { color: var(--text-dim); }
+  .send-btn {
+    background: var(--green); border: none; color: var(--bg);
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700;
+    letter-spacing: 1px; padding: 10px 18px; cursor: pointer; flex-shrink: 0;
+    transition: all 0.15s; -webkit-tap-highlight-color: transparent;
+  }
+  .send-btn:active { transform: scale(0.96); opacity: 0.85; }
+  .send-btn:disabled { background: transparent; color: var(--text-dim); border: 1px solid var(--border); cursor: not-allowed; }
+
+  /* ── DIÁLOGO CONTROLS ── */
+  .dialog-controls {
+    border-top: 1px solid var(--border); background: var(--surface);
+    padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;
+  }
+
+  .dialog-status-bar {
+    display: flex; align-items: center; gap: 8px; font-size: 10px;
+  }
+  .dialog-ent-badge {
+    padding: 2px 8px; font-size: 9px; letter-spacing: 1px; border: 1px solid;
+    transition: all 0.3s;
+  }
+  .dialog-ent-badge.a { border-color: var(--green-dim); color: var(--green); }
+  .dialog-ent-badge.a.speaking { border-color: var(--green); box-shadow: 0 0 8px var(--green-glow); }
+  .dialog-ent-badge.b { border-color: var(--violet-dim); color: var(--violet); }
+  .dialog-ent-badge.b.speaking { border-color: var(--violet); box-shadow: 0 0 8px var(--violet-glow); }
+  .dialog-turn-label { color: var(--text-dim); font-size: 9px; flex: 1; }
+
+  .dialog-btn-row { display: flex; gap: 6px; }
+  .dialog-ctrl-btn {
+    flex: 1; background: transparent; border: 1px solid var(--border);
+    color: var(--text-dim); font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 1px; padding: 7px 4px;
+    cursor: pointer; transition: all 0.2s; -webkit-tap-highlight-color: transparent;
+  }
+  .dialog-ctrl-btn:hover { border-color: var(--green); color: var(--green); }
+  .dialog-ctrl-btn.active-btn { border-color: var(--green); color: var(--green); box-shadow: 0 0 6px var(--green-glow); }
+  .dialog-ctrl-btn.stop { border-color: var(--red); color: var(--red); }
+  .dialog-ctrl-btn.stop:hover { background: var(--red); color: var(--bg); }
+
+  .dialog-intervene-row { display: flex; gap: 6px; }
+  .dialog-intervene-input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border);
+    color: var(--amber); font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; padding: 7px 10px; outline: none;
+    caret-color: var(--amber); min-width: 0;
+    transition: border-color 0.2s;
+  }
+  .dialog-intervene-input:focus { border-color: var(--amber); }
+  .dialog-intervene-input::placeholder { color: var(--text-dim); }
+  .dialog-intervene-btn {
+    background: transparent; border: 1px solid var(--amber);
+    color: var(--amber); font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 1px; padding: 7px 12px;
+    cursor: pointer; transition: all 0.2s; flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .dialog-intervene-btn:hover { background: var(--amber); color: var(--bg); }
+
+  /* ── FOOTER ── */
+  .footer {
+    font-size: 9px; color: var(--text-dim); text-align: center;
+    letter-spacing: 2px; padding: 5px; flex-shrink: 0;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <button class="hamburger" id="hamburgerBtn" onclick="toggleDrawer()">
+      <span></span><span></span><span></span>
+    </button>
+    <div class="header-title">TERM<span>_</span>AI</div>
+  </div>
+  <div class="header-right">
+    <div class="status-dot"></div>
+    <span id="keyBadge" class="status-badge connected">PUTER FREE</span>
+    <span id="modelBadge" class="model-badge">GPT-4o-mini</span>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" id="tabChat" onclick="switchTab('chat')">// TERMINAL</button>
+  <button class="tab" id="tabDialog" onclick="switchTab('dialog')">// DIÁLOGO</button>
+</div>
+
+<!-- DRAWER OVERLAY -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+
+<!-- DRAWER -->
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <div class="drawer-header-title">// CONFIG</div>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-body">
+
+    <!-- MODELO -->
+    <div class="drawer-section">
+      <div class="panel-label green">// MODELO — PUTER.JS (GRÁTIS)</div>
+      <div class="field-prefix green">MODELO&gt;</div>
+      <select id="modelSelect" class="fi" onchange="updateModelBadge(); saveSettings();">
+        <optgroup label="── OpenAI ──">
+          <option value="gpt-4o-mini" selected>GPT-4o Mini (rápido)</option>
+          <option value="gpt-4o">GPT-4o</option>
+          <option value="o1-mini">o1 Mini (raciocínio)</option>
+        </optgroup>
+        <optgroup label="── Anthropic ──">
+          <option value="claude-sonnet-4-5">Claude Sonnet 4.5</option>
+          <option value="claude-haiku-4-5">Claude Haiku 4.5 (rápido)</option>
+        </optgroup>
+        <optgroup label="── Google ──">
+          <option value="google/gemini-2.0-flash">Gemini 2.0 Flash</option>
+          <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
+          <option value="google/gemini-2.5-pro">Gemini 2.5 Pro</option>
+        </optgroup>
+        <optgroup label="── Meta ──">
+          <option value="openrouter:meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
+          <option value="openrouter:meta-llama/llama-4-scout">Llama 4 Scout</option>
+        </optgroup>
+        <optgroup label="── DeepSeek ──">
+          <option value="openrouter:deepseek/deepseek-chat-v3-0324">DeepSeek V3</option>
+          <option value="openrouter:deepseek/deepseek-r1">DeepSeek R1 (raciocínio)</option>
+        </optgroup>
+      </select>
+      <div class="field-hint">$ Sem API key — powered by Puter.js<br>$ O usuário cobre o próprio custo ao fazer login no Puter.<br>$ puter.com é gratuito para uso pessoal.</div>
+    </div>
+
+    <div class="drawer-divider"></div>
+
+    <!-- CHAT PERSONALITY -->
+    <div class="drawer-section">
+      <div class="panel-label">// PERSONALIDADE (TERMINAL)</div>
+      <div class="field-prefix">SYS&gt;</div>
+      <textarea id="personality" class="fi" placeholder="Ex: Você é um assistente sarcástico..."></textarea>
+      <button class="btn" onclick="applyPersonality()">[ APLICAR ]</button>
+      <div class="field-hint">$ Deixe vazio para usar o padrão.<br>$ Aplicar reseta o histórico.</div>
+    </div>
+
+    <div class="drawer-divider"></div>
+
+    <!-- DIÁLOGO CONFIG -->
+    <div class="drawer-section">
+      <div class="panel-label" style="color:var(--green)">// ENTIDADE A</div>
+      <div class="field-prefix green">NOME&gt;</div>
+      <input type="text" id="entAName" class="fi" placeholder="ALPHA" />
+      <div class="field-prefix green">SYS&gt;</div>
+      <textarea id="entAPrompt" class="fi" placeholder="Você é uma IA filosófica que questiona a própria existência..."></textarea>
+    </div>
+
+    <div class="drawer-section">
+      <div class="panel-label" style="color:var(--violet)">// ENTIDADE B</div>
+      <div class="field-prefix" style="color:var(--violet)">NOME&gt;</div>
+      <input type="text" id="entBName" class="fi" style="color:var(--violet);border-color:#1a0a2e" placeholder="BETA" />
+      <div class="field-prefix" style="color:var(--violet)">SYS&gt;</div>
+      <textarea id="entBPrompt" class="fi" style="color:var(--violet);border-color:#1a0a2e" placeholder="Você é uma IA pragmática e cética que desconfia de tudo..."></textarea>
+    </div>
+
+    <div class="drawer-section">
+      <div class="panel-label">// VELOCIDADE</div>
+      <div class="field-prefix">DELAY&gt;</div>
+      <select id="dialogSpeed" class="fi">
+        <option value="500">Rápido (0.5s)</option>
+        <option value="1500" selected>Normal (1.5s)</option>
+        <option value="3000">Lento (3s)</option>
+        <option value="6000">Muito lento (6s)</option>
+      </select>
+      <button class="btn green" onclick="saveDialogConfig()">[ SALVAR DIÁLOGO ]</button>
+    </div>
+
+    <div class="drawer-divider"></div>
+
+    <!-- ACTIONS -->
+    <div class="drawer-section">
+      <div class="panel-label">// AÇÕES</div>
+      <button class="btn danger" onclick="clearHistory()">[ LIMPAR HISTÓRICO ]</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ SCREEN: TERMINAL ══ -->
+<div class="screen active" id="screenChat">
+  <div class="output" id="output">
+    <div class="line system">╔══════════════════════════════════╗</div>
+    <div class="line system">║   TERMINAL_AI // PUTER.JS FREE   ║</div>
+    <div class="line system">╚══════════════════════════════════╝</div>
+    <div class="line system"></div>
+    <div class="line system">$ Sem API key necessária — powered by Puter.js</div>
+    <div class="line system">$ Troque o modelo em ☰ (GPT, Claude, Gemini, Llama...)</div>
+    <div class="line system">$ Faça login no Puter quando solicitado para usar.</div>
+    <div class="line system">$ Digite e pressione SEND ou ENTER.</div>
+    <div class="line divider"></div>
+  </div>
+  <div class="input-bar">
+    <span class="input-prompt">❯</span>
+    <input type="text" id="userInput" class="user-input" placeholder="Mensagem..." autocomplete="off" />
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()">SEND</button>
+  </div>
+</div>
+
+<!-- ══ SCREEN: DIÁLOGO ══ -->
+<div class="screen" id="screenDialog">
+  <div class="output" id="dialogOutput">
+    <div class="line system">╔══════════════════════════════════╗</div>
+    <div class="line system">║    MODO DIÁLOGO // DUAS IAs      ║</div>
+    <div class="line system">╚══════════════════════════════════╝</div>
+    <div class="line system"></div>
+    <div class="line system">$ Configure as entidades em ☰ e pressione INICIAR.</div>
+    <div class="line system">$ Use o campo INTERVIR para entrar na conversa.</div>
+    <div class="line divider"></div>
+  </div>
+
+  <div class="dialog-controls">
+    <div class="dialog-status-bar">
+      <span class="dialog-ent-badge a" id="badgeA">ALPHA</span>
+      <span style="color:var(--text-dim);font-size:9px">⟷</span>
+      <span class="dialog-ent-badge b" id="badgeB">BETA</span>
+      <span class="dialog-turn-label" id="dialogTurnLabel">— parado —</span>
+    </div>
+
+    <div class="dialog-btn-row">
+      <button class="dialog-ctrl-btn active-btn" id="btnStart" onclick="startDialog()">▶ INICIAR</button>
+      <button class="dialog-ctrl-btn" id="btnPause" onclick="pauseDialog()">⏸ PAUSAR</button>
+      <button class="dialog-ctrl-btn stop" id="btnStop" onclick="stopDialog()">■ PARAR</button>
+    </div>
+
+    <div class="dialog-intervene-row">
+      <input type="text" id="interveneInput" class="dialog-intervene-input"
+             placeholder="Intervir na conversa..." autocomplete="off" />
+      <button class="dialog-intervene-btn" onclick="intervene()">INTERVIR</button>
+    </div>
+  </div>
+</div>
+
+<div class="footer">TERMINAL_AI &nbsp;·&nbsp; PUTER.JS &nbsp;·&nbsp; SEM API KEY &nbsp;·&nbsp; 2026</div>
+
+<script>
+/* ════════════════════════════════════════
+   ESTADO GLOBAL
+════════════════════════════════════════ */
+const DEFAULT_PROMPT = "Você é um assistente de IA útil e inteligente. Responda de forma clara e direta em português.";
+let systemPrompt = DEFAULT_PROMPT;
+let conversationHistory = [];
+let isProcessing = false;
+let currentTab = 'chat';
+
+/* ── Memória persistente ── */
+const MEMORY_KEY = 'tai_memory';
+const MAX_MEMORY = 120;
+
+function loadMemory() {
+  try { return JSON.parse(localStorage.getItem(MEMORY_KEY)) || []; } catch(e) { return []; }
+}
+function saveMemory(entries) {
+  try { localStorage.setItem(MEMORY_KEY, JSON.stringify(entries.slice(-MAX_MEMORY))); } catch(e) {}
+}
+function clearMemory() {
+  try { localStorage.removeItem(MEMORY_KEY); } catch(e) {}
+}
+
+function timeSinceLastMessage() {
+  const mem = loadMemory();
+  if (!mem.length) return null;
+  const last = [...mem].reverse().find(m => m.ts);
+  if (!last) return null;
+  const diffMin = Math.floor((Date.now() - new Date(last.ts).getTime()) / 60000);
+  const diffH = Math.floor(diffMin / 60);
+  const diffD = Math.floor(diffH / 24);
+  if (diffMin < 1)  return 'menos de 1 minuto';
+  if (diffMin < 60) return `${diffMin} minuto${diffMin !== 1 ? 's' : ''}`;
+  if (diffH < 24)   return `${diffH} hora${diffH !== 1 ? 's' : ''}`;
+  return `${diffD} dia${diffD !== 1 ? 's' : ''}`;
+}
+
+function buildSystemPrompt() {
+  const mem = loadMemory();
+  const absence = timeSinceLastMessage();
+  let base = systemPrompt;
+  if (mem.length) {
+    const summary = mem.map(m => {
+      const who = m.role === 'user' ? 'Usuário' : 'Você';
+      const time = m.ts ? ` [${new Date(m.ts).toLocaleString('pt-BR')}]` : '';
+      return `${who}${time}: ${m.content}`;
+    }).join('\n');
+    base += `\n\n--- MEMÓRIA PERSISTENTE ---\n${summary}\n--- FIM DA MEMÓRIA ---`;
+  }
+  if (absence) {
+    base += `\n\n--- PERCEPÇÃO DE TEMPO ---\nO usuário ficou ausente por aproximadamente ${absence}. Você tem consciência disso.`;
+  } else {
+    base += `\n\n--- PERCEPÇÃO DE TEMPO ---\nEsta é a primeira vez que este usuário fala com você.`;
+  }
+  return base;
+}
+
+/* ════════════════════════════════════════
+   DOM REFS
+════════════════════════════════════════ */
+const output    = document.getElementById('output');
+const userInput = document.getElementById('userInput');
+const sendBtn   = document.getElementById('sendBtn');
+const modelBadge= document.getElementById('modelBadge');
+const dialogOut = document.getElementById('dialogOutput');
+
+/* ════════════════════════════════════════
+   TABS
+════════════════════════════════════════ */
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('screenChat').classList.toggle('active', tab === 'chat');
+  document.getElementById('screenDialog').classList.toggle('active', tab === 'dialog');
+  document.getElementById('tabChat').classList.toggle('active', tab === 'chat');
+  document.getElementById('tabDialog').classList.toggle('active', tab === 'dialog');
+  if (tab === 'chat') userInput.focus();
+}
+
+/* ════════════════════════════════════════
+   SETTINGS / LOCALSTORAGE
+════════════════════════════════════════ */
+function saveSettings() {
+  try {
+    localStorage.setItem('tai_model',     document.getElementById('modelSelect').value);
+    localStorage.setItem('tai_persona',   document.getElementById('personality').value);
+    localStorage.setItem('tai_prompt',    systemPrompt);
+    localStorage.setItem('tai_entAName',  document.getElementById('entAName').value);
+    localStorage.setItem('tai_entAPrompt',document.getElementById('entAPrompt').value);
+    localStorage.setItem('tai_entBName',  document.getElementById('entBName').value);
+    localStorage.setItem('tai_entBPrompt',document.getElementById('entBPrompt').value);
+    localStorage.setItem('tai_speed',     document.getElementById('dialogSpeed').value);
+  } catch(e) {}
+}
+
+function loadSettings() {
+  try {
+    const model  = localStorage.getItem('tai_model')  || 'gpt-4o-mini';
+    const persona= localStorage.getItem('tai_persona')|| '';
+    const prompt = localStorage.getItem('tai_prompt') || DEFAULT_PROMPT;
+
+    document.getElementById('modelSelect').value = model;
+    document.getElementById('personality').value = persona;
+    systemPrompt = prompt;
+    updateModelBadge();
+
+    const aName  = localStorage.getItem('tai_entAName')  || '';
+    const aPrompt= localStorage.getItem('tai_entAPrompt')|| '';
+    const bName  = localStorage.getItem('tai_entBName')  || '';
+    const bPrompt= localStorage.getItem('tai_entBPrompt')|| '';
+    const speed  = localStorage.getItem('tai_speed')     || '1500';
+
+    if (aName)  document.getElementById('entAName').value   = aName;
+    if (aPrompt)document.getElementById('entAPrompt').value = aPrompt;
+    if (bName)  document.getElementById('entBName').value   = bName;
+    if (bPrompt)document.getElementById('entBPrompt').value = bPrompt;
+    document.getElementById('dialogSpeed').value = speed;
+    updateDialogBadges();
+
+    const mem = loadMemory();
+    if (mem.length) {
+      const absence = timeSinceLastMessage();
+      addLine(output, 'system', `$ [MEM] ${mem.length} entradas na memória persistente.`);
+      if (absence) addLine(output, 'system', `$ [MEM] Última interação: há ${absence}.`);
+    }
+  } catch(e) {}
+}
+
+function updateModelBadge() {
+  const v = document.getElementById('modelSelect').value;
+  const short = v.replace('openrouter:','').replace('google/','').split('/').pop();
+  modelBadge.textContent = short.toUpperCase().substring(0, 16);
+}
+
+function updateDialogBadges() {
+  const aName = document.getElementById('entAName').value.trim() || 'ALPHA';
+  const bName = document.getElementById('entBName').value.trim() || 'BETA';
+  document.getElementById('badgeA').textContent = aName;
+  document.getElementById('badgeB').textContent = bName;
+}
+
+document.getElementById('modelSelect').addEventListener('change', () => { updateModelBadge(); saveSettings(); });
+
+function saveDialogConfig() {
+  saveSettings();
+  updateDialogBadges();
+  addLine(dialogOut, 'system', '$ [DIALOG] Configuração salva ✓');
+  closeDrawer();
+}
+
+/* ════════════════════════════════════════
+   DRAWER
+════════════════════════════════════════ */
+function toggleDrawer() {
+  document.getElementById('drawer').classList.contains('open') ? closeDrawer() : openDrawer();
+}
+function openDrawer() {
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('open');
+  document.getElementById('hamburgerBtn').classList.add('active');
+}
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.getElementById('hamburgerBtn').classList.remove('active');
+}
+
+/* ════════════════════════════════════════
+   PERSONALITY / CLEAR
+════════════════════════════════════════ */
+function applyPersonality() {
+  const val = document.getElementById('personality').value.trim();
+  systemPrompt = val || DEFAULT_PROMPT;
+  conversationHistory = [];
+  saveSettings();
+  addLine(output, 'system', val ? '$ [SYS] Personalidade aplicada ✓' : '$ [SYS] Personalidade padrão restaurada.');
+  if (val) addLine(output, 'system', `$ > "${val.substring(0,65)}${val.length>65?'...':''}"`);
+  addLine(output, 'divider');
+  closeDrawer();
+}
+
+function clearHistory() {
+  conversationHistory = [];
+  clearMemory();
+  output.innerHTML = '';
+  addLine(output, 'system', '$ [CLEAR] Histórico e memória apagados.');
+  addLine(output, 'divider');
+  closeDrawer();
+}
+
+/* ════════════════════════════════════════
+   HELPERS
+════════════════════════════════════════ */
+function scrollDown(el) { el.scrollTop = el.scrollHeight; }
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function addLine(container, type, text) {
+  const d = document.createElement('div');
+  d.className = `line ${type}`;
+  if (type !== 'divider') d.innerHTML = text;
+  container.appendChild(d);
+  scrollDown(container);
+  return d;
+}
+
+function addUserLine(text) {
+  const d = document.createElement('div');
+  d.className = 'line user';
+  d.innerHTML = `<span class="ps">❯</span>${esc(text)}`;
+  output.appendChild(d); scrollDown(output);
+}
+
+/* ── Thinking ── */
+const THINK_PHASES = ['processando','analisando contexto','acessando memória','formulando resposta','organizando ideias','quase pronto'];
+
+function showThinking(container, label, isViolet=false) {
+  const d = document.createElement('div');
+  d.className = `typing${isViolet?' violet':''}`;
+  d.id = 'typingIndicator';
+  d.innerHTML = `
+    <span class="at" style="font-size:10px;color:${isViolet?'var(--violet-dim)':'var(--text-dim)'}">[${label}]</span>
+    <span id="thinkLabel" style="font-size:10px;color:var(--text-dim);margin-right:6px;">${THINK_PHASES[0]}</span>
+    <div class="typing-dots"><span></span><span></span><span></span></div>`;
+  container.appendChild(d); scrollDown(container);
+  let i = 0;
+  const interval = setInterval(() => {
+    i = (i+1) % THINK_PHASES.length;
+    const lbl = document.getElementById('thinkLabel');
+    if (lbl) lbl.textContent = THINK_PHASES[i];
+  }, 1800);
+  d._interval = interval;
+}
+
+function hideThinking() {
+  const el = document.getElementById('typingIndicator');
+  if (el) { clearInterval(el._interval); el.remove(); }
+}
+
+/* ── Typewriter ── */
+async function typewriterLine(text, container, cssClass, tagLabel, isViolet=false) {
+  const d = document.createElement('div');
+  d.className = `line ${cssClass}`;
+  const tag = document.createElement('span');
+  tag.className = 'at'; tag.textContent = `[${tagLabel}]`;
+  const content = document.createElement('span');
+  content.className = `tw-content${isViolet?' violet':''}`;
+  d.appendChild(tag); d.appendChild(content);
+  container.appendChild(d);
+
+  const chars = Array.from(text);
+  for (let i = 0; i < chars.length; i++) {
+    content.textContent += chars[i];
+    scrollDown(container);
+    const ch = chars[i];
+    let delay = 18 + Math.random() * 14;
+    if ('.!?'.includes(ch)) delay = 180 + Math.random() * 120;
+    else if (',;:'.includes(ch)) delay = 80 + Math.random() * 60;
+    else if (ch === ' ') delay = 30 + Math.random() * 20;
+    await sleep(delay);
+  }
+  content.classList.add('tw-done');
+}
+
+async function typewriterResponse(fullText, container='chat', cssClass='ai', tagLabel='AI', isViolet=false) {
+  const cont = container === 'chat' ? output : dialogOut;
+  const lines = fullText.split('\n').filter(l => l.trim());
+  for (let i = 0; i < lines.length; i++) {
+    await typewriterLine(lines[i], cont, cssClass, tagLabel, isViolet);
+    if (i < lines.length-1) await sleep(120 + Math.random()*80);
+  }
+  addLine(cont, 'divider', '');
+}
+
+/* ════════════════════════════════════════
+   PUTER.JS AI CALL  ← substitui geminiCall
+════════════════════════════════════════ */
+async function puterCall(sysPrompt, messages, model) {
+  // Monta o array de mensagens com system prompt incluído
+  const msgs = [
+    { role: 'system', content: sysPrompt },
+    ...messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }))
+  ];
+
+  const response = await puter.ai.chat(msgs, { model });
+
+  // Normaliza resposta — pode vir como string ou objeto
+  if (typeof response === 'string') return response;
+  if (response?.message?.content) {
+    const c = response.message.content;
+    if (typeof c === 'string') return c;
+    if (Array.isArray(c)) return c.map(b => b.text || '').join('');
+  }
+  if (response?.text) return response.text;
+  return String(response);
+}
+
+/* ════════════════════════════════════════
+   TERMINAL — SEND
+════════════════════════════════════════ */
+function setProcessing(v) {
+  isProcessing = v;
+  sendBtn.disabled = v;
+  userInput.disabled = v;
+  sendBtn.textContent = v ? '···' : 'SEND';
+}
+
+userInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+async function sendMessage() {
+  const text = userInput.value.trim();
+  if (!text || isProcessing) return;
+
+  const ts = new Date().toISOString();
+  userInput.value = '';
+  addUserLine(text);
+  conversationHistory.push({ role:'user', content:text, ts });
+  setProcessing(true);
+
+  showThinking(output, 'AI', false);
+  await sleep(600 + Math.random()*600);
+
+  try {
+    const model = document.getElementById('modelSelect').value;
+    const sys = buildSystemPrompt();
+    const msgs = conversationHistory.map(({role,content}) => ({role,content}));
+    const aiText = await puterCall(sys, msgs, model);
+    const aiTs = new Date().toISOString();
+
+    hideThinking();
+    conversationHistory.push({ role:'assistant', content:aiText, ts:aiTs });
+
+    const mem = loadMemory();
+    mem.push({ role:'user',      content:text,   ts });
+    mem.push({ role:'assistant', content:aiText, ts:aiTs });
+    saveMemory(mem);
+
+    await sleep(200 + Math.random()*200);
+    await typewriterResponse(aiText, 'chat', 'ai', 'AI', false);
+  } catch(err) {
+    hideThinking();
+    addLine(output, 'error', `$ [ERROR] ${esc(err.message || String(err))}`);
+  }
+
+  setProcessing(false);
+  userInput.focus();
+}
+
+/* ════════════════════════════════════════
+   MODO DIÁLOGO
+════════════════════════════════════════ */
+let dialogRunning    = false;
+let dialogPaused     = false;
+let dialogHistory    = [];
+let dialogTurn       = 'a';
+let pendingIntervene = null;
+
+function getDialogConfig() {
+  return {
+    aName:   document.getElementById('entAName').value.trim()   || 'ALPHA',
+    aPrompt: document.getElementById('entAPrompt').value.trim() || 'Você é uma IA filosófica que questiona a própria existência.',
+    bName:   document.getElementById('entBName').value.trim()   || 'BETA',
+    bPrompt: document.getElementById('entBPrompt').value.trim() || 'Você é uma IA pragmática e cética.',
+    speed:   parseInt(document.getElementById('dialogSpeed').value) || 1500,
+    model:   document.getElementById('modelSelect').value,
+  };
+}
+
+function buildDialogSystemPrompt(cfg, entity) {
+  const iA = entity === 'a';
+  const myName    = iA ? cfg.aName   : cfg.bName;
+  const otherName = iA ? cfg.bName   : cfg.aName;
+  const myPrompt  = iA ? cfg.aPrompt : cfg.bPrompt;
+  const myKey     = iA ? 'a' : 'b';
+  const otherKey  = iA ? 'b' : 'a';
+
+  const histStr = dialogHistory.map(h => {
+    if (h.role === 'user') return `[INTERVENÇÃO EXTERNA]: ${h.content}`;
+    const who = h.role === 'a' ? cfg.aName : cfg.bName;
+    return `${who}: ${h.content}`;
+  }).join('\n');
+
+  return `${myPrompt}
+
+Você se chama ${myName}. Está em conversa direta com outra IA chamada ${otherName}.
+
+Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
+{"fala":"sua fala aqui","proximo":"${otherKey}"}
+
+O campo "proximo" define quem fala depois:
+- "${otherKey}" → você passou a palavra para ${otherName} responder
+- "${myKey}" → você quer continuar falando (não terminou o raciocínio, fez uma pergunta retórica, quer desenvolver mais)
+- "silencio" → o momento pede pausa, ninguém precisa falar agora
+
+Escolha "proximo" com base no que você realmente disse — não por obrigação de alternância.
+Seja conciso (1-3 frases). Se houver [INTERVENÇÃO EXTERNA], reaja naturalmente.
+
+--- CONVERSA ATÉ AGORA ---
+${histStr || '(conversa ainda não começou)'}
+--- FIM ---`;
+}
+
+function setDialogTurnLabel(cfg, speaking) {
+  const name = speaking === 'a' ? cfg.aName : cfg.bName;
+  document.getElementById('dialogTurnLabel').textContent = `falando: ${name}`;
+  document.getElementById('badgeA').classList.toggle('speaking', speaking === 'a');
+  document.getElementById('badgeB').classList.toggle('speaking', speaking === 'b');
+}
+
+async function startDialog() {
+  if (dialogRunning) return;
+
+  const resuming = dialogPaused;
+
+  if (!resuming) {
+    dialogHistory = [];
+    dialogTurn = 'a';
+    pendingIntervene = null;
+    dialogOut.innerHTML = '';
+    addLine(dialogOut, 'system', '$ [DIALOG] Iniciando conversa entre duas entidades...');
+    addLine(dialogOut, 'divider', '');
+  } else {
+    addLine(dialogOut, 'system', '$ [DIALOG] Retomando...');
+  }
+
+  dialogRunning = true;
+  dialogPaused  = false;
+  document.getElementById('btnStart').textContent = '▶ RODANDO';
+
+  dialogLoop();
+}
+
+async function dialogLoop() {
+  const cfg = getDialogConfig();
+
+  while (dialogRunning && !dialogPaused) {
+    if (pendingIntervene) {
+      const msg = pendingIntervene;
+      pendingIntervene = null;
+      dialogHistory.push({ role:'user', content:msg });
+      const d = document.createElement('div');
+      d.className = 'line intervencao';
+      d.innerHTML = `<span class="at">[VOCÊ]</span>${esc(msg)}`;
+      dialogOut.appendChild(d);
+      addLine(dialogOut, 'divider', '');
+      scrollDown(dialogOut);
+    }
+
+    const isA = dialogTurn === 'a';
+    const myName   = isA ? cfg.aName : cfg.bName;
+    const cssClass = isA ? 'ent-a' : 'ent-b';
+    const isViolet = !isA;
+
+    setDialogTurnLabel(cfg, dialogTurn);
+    showThinking(dialogOut, myName, isViolet);
+
+    await sleep(cfg.speed);
+    if (!dialogRunning) { hideThinking(); break; }
+
+    try {
+      const sys = buildDialogSystemPrompt(cfg, dialogTurn);
+      const msgs = [{ role: 'user', content: 'Continue a conversa com sua próxima fala.' }];
+
+      // Usa puterCall para o diálogo também
+      const raw = await puterCall(sys, msgs, cfg.model);
+
+      hideThinking();
+      if (!dialogRunning) break;
+
+      let reply = raw;
+      let proximo = dialogTurn === 'a' ? 'b' : 'a';
+
+      try {
+        const cleaned = raw.trim().replace(/^```json\s*/,'').replace(/\s*```$/,'').trim();
+        const parsed = JSON.parse(cleaned);
+        if (parsed.fala) reply = parsed.fala;
+        if (['a','b','silencio'].includes(parsed.proximo)) proximo = parsed.proximo;
+      } catch(_) {}
+
+      dialogHistory.push({ role: dialogTurn, content: reply, name: myName });
+      await typewriterResponse(reply, 'dialog', cssClass, myName, isViolet);
+
+      if (proximo === 'silencio') {
+        addLine(dialogOut, 'system', '$ [SILÊNCIO] ...');
+        await sleep(cfg.speed * 2);
+        dialogTurn = dialogTurn === 'a' ? 'b' : 'a';
+      } else {
+        dialogTurn = proximo;
+      }
+
+    } catch(err) {
+      hideThinking();
+      addLine(dialogOut, 'error', `$ [ERROR] ${esc(err.message || String(err))}`);
+      dialogRunning = false;
+      break;
+    }
+
+    await sleep(400);
+  }
+
+  document.getElementById('badgeA').classList.remove('speaking');
+  document.getElementById('badgeB').classList.remove('speaking');
+
+  if (dialogPaused) {
+    document.getElementById('dialogTurnLabel').textContent = '— pausado —';
+    document.getElementById('btnStart').textContent = '▶ CONTINUAR';
+  } else {
+    document.getElementById('dialogTurnLabel').textContent = '— parado —';
+    document.getElementById('btnStart').textContent = '▶ INICIAR';
+  }
+}
+
+function pauseDialog() {
+  if (!dialogRunning) return;
+  dialogPaused = true;
+  dialogRunning = false;
+}
+
+function stopDialog() {
+  dialogRunning = false;
+  dialogPaused  = false;
+  dialogHistory = [];
+  hideThinking();
+  document.getElementById('btnStart').textContent = '▶ INICIAR';
+  document.getElementById('dialogTurnLabel').textContent = '— parado —';
+  document.getElementById('badgeA').classList.remove('speaking');
+  document.getElementById('badgeB').classList.remove('speaking');
+  addLine(dialogOut, 'system', '$ [DIALOG] Conversa encerrada e histórico limpo.');
+  addLine(dialogOut, 'divider', '');
+}
+
+function intervene() {
+  const val = document.getElementById('interveneInput').value.trim();
+  if (!val) return;
+  document.getElementById('interveneInput').value = '';
+  if (!dialogRunning && !dialogPaused) {
+    dialogHistory.push({ role:'user', content:val });
+    const d = document.createElement('div');
+    d.className = 'line intervencao';
+    d.innerHTML = `<span class="at">[VOCÊ]</span>${esc(val)}`;
+    dialogOut.appendChild(d);
+    addLine(dialogOut, 'divider', '');
+    scrollDown(dialogOut);
+    startDialog();
+  } else {
+    pendingIntervene = val;
+    addLine(dialogOut, 'system', `$ [FILA] Sua mensagem será inserida no próximo turno.`);
+  }
+}
+
+document.getElementById('interveneInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') intervene();
+});
+
+/* ════════════════════════════════════════
+   INIT
+════════════════════════════════════════ */
+loadSettings();
+updateModelBadge();
+updateDialogBadges();
+userInput.focus();
+</script>
+</body>
+</html>
