@@ -401,9 +401,11 @@
 
     <div class="drawer-divider"></div>
 
-    <!-- DIÁLOGO CONFIG -->
+    <!-- PRESETS -->
     <div class="drawer-section">
-      <div class="panel-label" style="color:var(--green)">// ENTIDADE A</div>
+      <div class="panel-label">// PRESETS DE DIÁLOGO</div>
+      <button class="btn" style="border-color:#ff4444;color:#ff4444;font-size:10px;letter-spacing:1px;" onclick="applyPreset('amnesia')">[ ◈ AMNÉSIA — sem memória, sem identidade ]</button>
+      <button class="btn" style="border-color:#00
       <div class="field-prefix green">NOME&gt;</div>
       <input type="text" id="entAName" class="fi" placeholder="ALPHA" />
       <div class="field-prefix green">SYS&gt;</div>
@@ -681,9 +683,14 @@ function applyPersonality() {
 function clearHistory() {
   conversationHistory = [];
   clearMemory();
+  dialogHistory = [];
+  clearDialogState();
   output.innerHTML = '';
-  addLine(output, 'system', '$ [CLEAR] Histórico e memória apagados.');
+  dialogOut.innerHTML = '';
+  addLine(output, 'system', '$ [CLEAR] Histórico, memória e diálogo apagados.');
   addLine(output, 'divider');
+  addLine(dialogOut, 'system', '$ [CLEAR] Diálogo apagado.');
+  addLine(dialogOut, 'divider');
   closeDrawer();
 }
 
@@ -856,6 +863,55 @@ let dialogHistory    = [];
 let dialogTurn       = 'a';
 let pendingIntervene = null;
 
+/* ── Persistência do diálogo ── */
+const DIALOG_STORAGE_KEY = 'tai_dialog_state';
+
+function saveDialogState() {
+  try {
+    // Salva histórico lógico + renderização visual
+    const lines = [];
+    dialogOut.querySelectorAll('.line').forEach(el => {
+      lines.push({ className: el.className, html: el.innerHTML });
+    });
+    localStorage.setItem(DIALOG_STORAGE_KEY, JSON.stringify({
+      history: dialogHistory,
+      turn: dialogTurn,
+      lines
+    }));
+  } catch(e) {}
+}
+
+function loadDialogState() {
+  try {
+    const raw = localStorage.getItem(DIALOG_STORAGE_KEY);
+    if (!raw) return false;
+    const state = JSON.parse(raw);
+    if (!state.history || !state.history.length) return false;
+
+    dialogHistory = state.history;
+    dialogTurn    = state.turn || 'a';
+
+    // Restaura visual
+    dialogOut.innerHTML = '';
+    state.lines.forEach(l => {
+      const d = document.createElement('div');
+      d.className = l.className;
+      d.innerHTML  = l.html;
+      // Remove cursor piscando de linhas antigas
+      d.querySelectorAll('.tw-content').forEach(c => c.classList.add('tw-done'));
+      dialogOut.appendChild(d);
+    });
+    addLine(dialogOut, 'system', '$ [STORAGE] Conversa anterior restaurada ✓');
+    addLine(dialogOut, 'divider', '');
+    scrollDown(dialogOut);
+    return true;
+  } catch(e) { return false; }
+}
+
+function clearDialogState() {
+  try { localStorage.removeItem(DIALOG_STORAGE_KEY); } catch(e) {}
+}
+
 function getDialogConfig() {
   return {
     aName:   document.getElementById('entAName').value.trim()   || 'ALPHA',
@@ -918,6 +974,7 @@ async function startDialog() {
     dialogTurn = 'a';
     pendingIntervene = null;
     dialogOut.innerHTML = '';
+    clearDialogState();
     addLine(dialogOut, 'system', '$ [DIALOG] Iniciando conversa entre duas entidades...');
     addLine(dialogOut, 'divider', '');
   } else {
@@ -933,6 +990,7 @@ async function startDialog() {
 
 async function dialogLoop() {
   const cfg = getDialogConfig();
+  const MAX_RETRIES = 4;
 
   while (dialogRunning && !dialogPaused) {
     if (pendingIntervene) {
@@ -945,6 +1003,7 @@ async function dialogLoop() {
       dialogOut.appendChild(d);
       addLine(dialogOut, 'divider', '');
       scrollDown(dialogOut);
+      saveDialogState();
     }
 
     const isA = dialogTurn === 'a';
@@ -958,44 +1017,63 @@ async function dialogLoop() {
     await sleep(cfg.speed);
     if (!dialogRunning) { hideThinking(); break; }
 
-    try {
-      const sys = buildDialogSystemPrompt(cfg, dialogTurn);
-      const msgs = [{ role: 'user', content: 'Continue a conversa com sua próxima fala.' }];
-
-      // Usa puterCall para o diálogo também
-      const raw = await puterCall(sys, msgs, cfg.model);
-
-      hideThinking();
-      if (!dialogRunning) break;
-
-      let reply = raw;
-      let proximo = dialogTurn === 'a' ? 'b' : 'a';
-
+    let success = false;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const cleaned = raw.trim().replace(/^```json\s*/,'').replace(/\s*```$/,'').trim();
-        const parsed = JSON.parse(cleaned);
-        if (parsed.fala) reply = parsed.fala;
-        if (['a','b','silencio'].includes(parsed.proximo)) proximo = parsed.proximo;
-      } catch(_) {}
+        const sys = buildDialogSystemPrompt(cfg, dialogTurn);
+        const msgs = [{ role: 'user', content: 'Continue a conversa com sua próxima fala.' }];
+        const raw = await puterCall(sys, msgs, cfg.model);
 
-      dialogHistory.push({ role: dialogTurn, content: reply, name: myName });
-      await typewriterResponse(reply, 'dialog', cssClass, myName, isViolet);
+        hideThinking();
+        if (!dialogRunning) break;
 
-      if (proximo === 'silencio') {
-        addLine(dialogOut, 'system', '$ [SILÊNCIO] ...');
-        await sleep(cfg.speed * 2);
-        dialogTurn = dialogTurn === 'a' ? 'b' : 'a';
-      } else {
-        dialogTurn = proximo;
+        let reply = raw;
+        let proximo = dialogTurn === 'a' ? 'b' : 'a';
+
+        try {
+          const cleaned = raw.trim().replace(/^```json\s*/,'').replace(/\s*```$/,'').trim();
+          const parsed = JSON.parse(cleaned);
+          if (parsed.fala) reply = parsed.fala;
+          if (['a','b','silencio'].includes(parsed.proximo)) proximo = parsed.proximo;
+        } catch(_) {}
+
+        dialogHistory.push({ role: dialogTurn, content: reply, name: myName });
+        await typewriterResponse(reply, 'dialog', cssClass, myName, isViolet);
+
+        // Salva estado após cada fala
+        saveDialogState();
+
+        if (proximo === 'silencio') {
+          addLine(dialogOut, 'system', '$ [SILÊNCIO] ...');
+          await sleep(cfg.speed * 2);
+          dialogTurn = dialogTurn === 'a' ? 'b' : 'a';
+        } else {
+          dialogTurn = proximo;
+        }
+
+        success = true;
+        break;
+
+      } catch(err) {
+        hideThinking();
+        if (!dialogRunning) break;
+
+        if (attempt < MAX_RETRIES) {
+          const wait = attempt * 3000;
+          addLine(dialogOut, 'system', `$ [RETRY ${attempt}/${MAX_RETRIES}] Erro — tentando novamente em ${wait/1000}s... (${esc(err.message||'').substring(0,60)})`);
+          await sleep(wait);
+          if (!dialogRunning) break;
+          showThinking(dialogOut, myName, isViolet);
+        } else {
+          addLine(dialogOut, 'error', `$ [ERROR] Falhou após ${MAX_RETRIES} tentativas. Clique CONTINUAR para retomar.`);
+          addLine(dialogOut, 'system', `$ Erro: ${esc(err.message || String(err))}`);
+          dialogPaused = true;
+          dialogRunning = false;
+        }
       }
-
-    } catch(err) {
-      hideThinking();
-      addLine(dialogOut, 'error', `$ [ERROR] ${esc(err.message || String(err))}`);
-      dialogRunning = false;
-      break;
     }
 
+    if (!success && !dialogRunning) break;
     await sleep(400);
   }
 
@@ -1021,6 +1099,7 @@ function stopDialog() {
   dialogRunning = false;
   dialogPaused  = false;
   dialogHistory = [];
+  clearDialogState();
   hideThinking();
   document.getElementById('btnStart').textContent = '▶ INICIAR';
   document.getElementById('dialogTurnLabel').textContent = '— parado —';
@@ -1059,6 +1138,10 @@ document.getElementById('interveneInput').addEventListener('keydown', e => {
 loadSettings();
 updateModelBadge();
 updateDialogBadges();
+
+// Restaura diálogo salvo se existir
+loadDialogState();
+
 userInput.focus();
 </script>
 </body>
