@@ -294,8 +294,6 @@
   }
   .dialog-ctrl-btn:hover { border-color: var(--green); color: var(--green); }
   .dialog-ctrl-btn.active-btn { border-color: var(--green); color: var(--green); box-shadow: 0 0 6px var(--green-glow); }
-  .dialog-ctrl-btn.stop { border-color: var(--red); color: var(--red); }
-  .dialog-ctrl-btn.stop:hover { background: var(--red); color: var(--bg); }
 
   .dialog-intervene-row { display: flex; gap: 6px; }
   .dialog-intervene-input {
@@ -419,15 +417,16 @@
         <option value="3000">Lento (3s)</option>
         <option value="6000">Muito lento (6s)</option>
       </select>
-      <button class="btn green" onclick="saveDialogConfig()">[ SALVAR DIÁLOGO ]</button>
+      <button class="btn green" onclick="saveDialogConfig()">[ APLICAR ]</button>
     </div>
 
     <div class="drawer-divider"></div>
 
-    <!-- ACTIONS -->
+    <!-- AÇÕES -->
     <div class="drawer-section">
       <div class="panel-label">// AÇÕES</div>
-      <button class="btn danger" onclick="clearHistory()">[ LIMPAR HISTÓRICO ]</button>
+      <button class="btn danger" onclick="clearHistory()">[ RESETAR TERMINAL ]</button>
+      <button class="btn danger" onclick="resetDialog()">[ RESETAR DIÁLOGO ]</button>
     </div>
 
   </div>
@@ -473,11 +472,10 @@
       <span class="dialog-turn-label" id="dialogTurnLabel">— parado —</span>
     </div>
 
-    <!-- Botões de controle -->
+    <!-- Botões de controle: apenas INICIAR e PAUSAR -->
     <div class="dialog-btn-row">
       <button class="dialog-ctrl-btn active-btn" id="btnStart" onclick="startDialog()">▶ INICIAR</button>
       <button class="dialog-ctrl-btn" id="btnPause" onclick="pauseDialog()">⏸ PAUSAR</button>
-      <button class="dialog-ctrl-btn stop" id="btnStop" onclick="stopDialog()">■ PARAR</button>
     </div>
 
     <!-- Campo de intervenção -->
@@ -505,8 +503,8 @@ let currentModel = 'gpt-5-nano';
 /* ════════════════════════════════════════
    MEMÓRIA PERSISTENTE (LocalStorage)
 ════════════════════════════════════════ */
-const MEMORY_KEY = 'tai_memory';
-const MAX_MEMORY = 120;
+const MEMORY_KEY      = 'tai_memory';
+const MAX_MEMORY      = 120;
 
 function loadMemory() {
   try { return JSON.parse(localStorage.getItem(MEMORY_KEY)) || []; } catch(e) { return []; }
@@ -518,7 +516,7 @@ function clearMemory() {
   try { localStorage.removeItem(MEMORY_KEY); } catch(e) {}
 }
 
-/* ── PERSISTÊNCIA DO DIÁLOGO ── */
+/* ── PERSISTÊNCIA DO DIÁLOGO (histórico JSON) ── */
 const DIALOG_HISTORY_KEY = 'tai_dialog_history';
 const DIALOG_TURN_KEY    = 'tai_dialog_turn';
 const MAX_DIALOG_HISTORY = 200;
@@ -545,6 +543,17 @@ function clearDialogHistory() {
   } catch(e) {}
 }
 
+/* ── PERSISTÊNCIA DO HTML VISUAL ── */
+const CHAT_HTML_KEY   = 'tai_chat_html';
+const DIALOG_HTML_KEY = 'tai_dialog_html';
+
+function saveChatHTML() {
+  try { localStorage.setItem(CHAT_HTML_KEY, output.innerHTML); } catch(e) {}
+}
+function saveDialogHTML() {
+  try { localStorage.setItem(DIALOG_HTML_KEY, dialogOut.innerHTML); } catch(e) {}
+}
+
 function timeSinceLastMessage() {
   const mem = loadMemory();
   if (!mem.length) return null;
@@ -568,13 +577,13 @@ function buildSystemPrompt() {
       const who = m.role === 'user' ? 'Usuário' : 'Você';
       const time = m.ts ? ` [${new Date(m.ts).toLocaleString('pt-BR')}]` : '';
       return `${who}${time}: ${m.content}`;
-    }).join('\\n');
-    base += `\\n\\n--- MEMÓRIA PERSISTENTE ---\\n${summary}\\n--- FIM DA MEMÓRIA ---`;
+    }).join('\n');
+    base += `\n\n--- MEMÓRIA PERSISTENTE ---\n${summary}\n--- FIM DA MEMÓRIA ---`;
   }
   if (absence) {
-    base += `\\n\\n--- PERCEPÇÃO DE TEMPO ---\\nO usuário ficou ausente por aproximadamente ${absence}. Você tem consciência disso.`;
+    base += `\n\n--- PERCEPÇÃO DE TEMPO ---\nO usuário ficou ausente por aproximadamente ${absence}. Você tem consciência disso.`;
   } else {
-    base += `\\n\\n--- PERCEPÇÃO DE TEMPO ---\\nEsta é a primeira vez que este usuário fala com você.`;
+    base += `\n\n--- PERCEPÇÃO DE TEMPO ---\nEsta é a primeira vez que este usuário fala com você.`;
   }
   return base;
 }
@@ -658,6 +667,22 @@ function loadSettings() {
     document.getElementById('dialogSpeed').value = speed;
     updateDialogBadges();
 
+    // Restaura HTML visual do terminal
+    const savedChatHTML = localStorage.getItem(CHAT_HTML_KEY);
+    if (savedChatHTML) {
+      output.innerHTML = savedChatHTML;
+      output.querySelectorAll('.tw-content').forEach(el => el.classList.add('tw-done'));
+      scrollDown(output);
+    }
+
+    // Restaura HTML visual do diálogo
+    const savedDialogHTML = localStorage.getItem(DIALOG_HTML_KEY);
+    if (savedDialogHTML) {
+      dialogOut.innerHTML = savedDialogHTML;
+      dialogOut.querySelectorAll('.tw-content').forEach(el => el.classList.add('tw-done'));
+      scrollDown(dialogOut);
+    }
+
     addLine(output, 'system', '$ [STORAGE] Configurações restauradas ✓');
     const mem = loadMemory();
     if (mem.length) {
@@ -728,6 +753,7 @@ function applyPersonality() {
 function clearHistory() {
   conversationHistory = [];
   clearMemory();
+  localStorage.removeItem(CHAT_HTML_KEY);
   output.innerHTML = '';
   addLine(output, 'system', '$ [CLEAR] Histórico e memória apagados.');
   addLine(output, 'divider', '');
@@ -810,7 +836,7 @@ async function typewriterLine(text, container, cssClass, tagLabel, isViolet=fals
 
 async function typewriterResponse(fullText, container='chat', cssClass='ai', tagLabel='AI', isViolet=false) {
   const cont = container === 'chat' ? output : dialogOut;
-  const lines = fullText.split('\\n').filter(l => l.trim());
+  const lines = fullText.split('\n').filter(l => l.trim());
   for (let i = 0; i < lines.length; i++) {
     await typewriterLine(lines[i], cont, cssClass, tagLabel, isViolet);
     if (i < lines.length-1) await sleep(120 + Math.random()*80);
@@ -822,24 +848,16 @@ async function typewriterResponse(fullText, container='chat', cssClass='ai', tag
    PUTER.JS API CALL
 ════════════════════════════════════════ */
 async function puterCall(sysPrompt, messages, model) {
-  // Constrói o contexto completo
-  let fullPrompt = sysPrompt + "\\n\\n";
-  
-  // Adiciona histórico da conversa
+  let fullPrompt = sysPrompt + "\n\n";
   messages.forEach(m => {
     if (m.role === 'user') {
-      fullPrompt += `Usuário: ${m.content}\\n`;
+      fullPrompt += `Usuário: ${m.content}\n`;
     } else {
-      fullPrompt += `Assistente: ${m.content}\\n`;
+      fullPrompt += `Assistente: ${m.content}\n`;
     }
   });
-  
-  // Adiciona prompt para resposta atual
   fullPrompt += "Assistente:";
-  
-  // Chama Puter.ai.chat
   const response = await puter.ai.chat(fullPrompt, { model: model });
-  
   return response.message?.content || response;
 }
 
@@ -886,6 +904,7 @@ async function sendMessage() {
 
     await sleep(200 + Math.random()*150);
     await typewriterResponse(aiText, 'chat', 'ai', 'AI', false);
+    saveChatHTML();
   } catch(err) {
     hideThinking();
     addLine(output, 'error', `$ [PUTER ERROR] ${esc(err.message)}`);
@@ -901,9 +920,9 @@ async function sendMessage() {
 ════════════════════════════════════════ */
 let dialogRunning   = false;
 let dialogPaused    = false;
-let dialogHistory   = []; // { role: 'a'|'b'|'user', content, name }
-let dialogTurn      = 'a'; // quem fala agora
-let pendingIntervene = null; // mensagem de intervenção pendente
+let dialogHistory   = [];
+let dialogTurn      = 'a';
+let pendingIntervene = null;
 
 function getDialogConfig() {
   return {
@@ -924,7 +943,6 @@ function buildDialogSystemPrompt(cfg, entity) {
   const myKey     = iA ? 'a' : 'b';
   const otherKey  = iA ? 'b' : 'a';
 
-  // Labels de exibição no histórico
   const myLabel    = myName    || `Entidade-${myKey.toUpperCase()}`;
   const otherLabel = otherName || `Entidade-${otherKey.toUpperCase()}`;
 
@@ -937,12 +955,10 @@ function buildDialogSystemPrompt(cfg, entity) {
     return `[${roleTag}] ${who}: ${h.content}`;
   }).join('\n');
 
-  // Aviso se ambas tiverem o mesmo nome (não vazio)
   const sameNameWarning = (myName && myName === otherName)
     ? `\nATENÇÃO: Você e sua interlocutora têm o mesmo nome ("${myName}"), mas são entidades completamente distintas e independentes. No histórico, suas falas aparecem como [${myKey.toUpperCase()}] e as dela como [${otherKey.toUpperCase()}]. NÃO repita o que ela disse. Responda de forma original e diferente.\n`
     : '';
 
-  // Instrução sobre nome: se não tem nome, pode dar um a si mesma naturalmente
   const nameInstruction = myName
     ? `Você é a entidade [${myKey.toUpperCase()}], seu nome é ${myName}.`
     : `Você é a entidade [${myKey.toUpperCase()}]. Você ainda não tem um nome — isso pode surgir naturalmente na conversa se fizer sentido, mas não há obrigação alguma. Não force nem mencione isso desnecessariamente.`;
@@ -978,22 +994,44 @@ function setDialogTurnLabel(cfg, speaking) {
   document.getElementById('badgeB').classList.toggle('speaking', speaking === 'b');
 }
 
+/* ── Auto-detectar nome sugerido pela IA ── */
+function tryExtractNameFromReply(reply, entity) {
+  const nameEl = entity === 'a' ? document.getElementById('entAName') : document.getElementById('entBName');
+  if (nameEl.value.trim()) return; // já tem nome, não sobrescreve
+
+  const patterns = [
+    /(?:me chamo|meu nome é|sou a?|serei|escolho|vou me chamar de|pode me chamar de)\s+[""]?([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)?)[""]?/i,
+    /\bseria\s+[""]?([A-ZÀ-Ú][a-zà-ú]+)[""]?/i,
+    /[""]([A-ZÀ-Ú][a-zà-ú]+)[""]\s*(?:é|seria|soa|parece)/i,
+  ];
+
+  for (const pat of patterns) {
+    const m = reply.match(pat);
+    if (m && m[1] && m[1].length >= 3 && m[1].length <= 30) {
+      nameEl.value = m[1];
+      saveSettings();
+      updateDialogBadges();
+      const label = entity === 'a' ? 'A' : 'B';
+      addLine(dialogOut, 'system', `$ [NOME] Entidade-${label} se nomeou: ${m[1]} ✓`);
+      saveDialogHTML();
+      return;
+    }
+  }
+}
+
 async function startDialog() {
   if (dialogRunning) return;
 
   const resuming = dialogPaused;
 
   if (!resuming) {
-    // Verifica se há histórico salvo para restaurar
     const saved = loadDialogHistory();
     if (saved.history.length > 0 && dialogHistory.length === 0) {
-      // Restaura histórico anterior
       dialogHistory = saved.history;
       dialogTurn = saved.turn;
       addLine(dialogOut, 'system', `$ [DIALOG] Histórico restaurado (${dialogHistory.length} mensagens). Retomando...`);
       addLine(dialogOut, 'divider', '');
     } else {
-      // Nova conversa
       dialogHistory = [];
       dialogTurn = 'a';
       pendingIntervene = null;
@@ -1017,7 +1055,6 @@ async function dialogLoop() {
   const cfg = getDialogConfig();
 
   while (dialogRunning && !dialogPaused) {
-    // Injeta intervenção se houver
     if (pendingIntervene) {
       const msg = pendingIntervene;
       pendingIntervene = null;
@@ -1038,7 +1075,6 @@ async function dialogLoop() {
     setDialogTurnLabel(cfg, dialogTurn);
     showThinking(dialogOut, myName, isViolet);
 
-    // Delay entre turnos
     await sleep(cfg.speed);
     if (!dialogRunning) { hideThinking(); break; }
 
@@ -1051,29 +1087,30 @@ async function dialogLoop() {
       if (!dialogRunning) break;
 
       let reply = raw;
-      let proximo = dialogTurn === 'a' ? 'b' : 'a'; // fallback: alterna normal
+      let proximo = dialogTurn === 'a' ? 'b' : 'a';
 
       try {
-        // Remove possíveis blocos de código markdown que o modelo às vezes inclui
-        const cleaned = raw.trim().replace(/^\`\`\`json\\s*/,'').replace(/\\s*\`\`\`$/,'').trim();
+        const cleaned = raw.trim().replace(/^```json\s*/,'').replace(/\s*```$/,'').trim();
         const parsed = JSON.parse(cleaned);
         if (parsed.fala) reply = parsed.fala;
         if (['a','b','silencio'].includes(parsed.proximo)) proximo = parsed.proximo;
-      } catch(_) { /* resposta não veio em JSON, usa o texto cru */ }
+      } catch(_) {}
 
+      const currentTurn = dialogTurn;
       dialogHistory.push({ role: dialogTurn, content: reply, name: myName });
       saveDialogHistory();
       await typewriterResponse(reply, 'dialog', cssClass, myName || `Entidade-${dialogTurn.toUpperCase()}`, isViolet);
+      saveDialogHTML();
+      tryExtractNameFromReply(reply, currentTurn);
 
       if (proximo === 'silencio') {
         addLine(dialogOut, 'system', '$ [SILÊNCIO] ...');
         await sleep(cfg.speed * 2);
-        // após silêncio, passa pra outra entidade
         dialogTurn = dialogTurn === 'a' ? 'b' : 'a';
       } else {
         dialogTurn = proximo;
       }
-      saveDialogHistory(); // persiste turno atual
+      saveDialogHistory();
 
     } catch(err) {
       hideThinking();
@@ -1083,7 +1120,6 @@ async function dialogLoop() {
       break;
     }
 
-    // Pequena pausa extra entre turnos
     await sleep(400);
   }
 
@@ -1105,18 +1141,21 @@ function pauseDialog() {
   dialogRunning = false;
 }
 
-function stopDialog() {
+function resetDialog() {
   dialogRunning = false;
   dialogPaused  = false;
   dialogHistory = [];
   clearDialogHistory();
+  localStorage.removeItem(DIALOG_HTML_KEY);
   hideThinking();
   document.getElementById('btnStart').textContent = '▶ INICIAR';
   document.getElementById('dialogTurnLabel').textContent = '— parado —';
   document.getElementById('badgeA').classList.remove('speaking');
   document.getElementById('badgeB').classList.remove('speaking');
+  dialogOut.innerHTML = '';
   addLine(dialogOut, 'system', '$ [DIALOG] Conversa encerrada e histórico limpo.');
   addLine(dialogOut, 'divider', '');
+  closeDrawer();
 }
 
 function intervene() {
@@ -1124,7 +1163,6 @@ function intervene() {
   if (!val) return;
   document.getElementById('interveneInput').value = '';
   if (!dialogRunning && !dialogPaused) {
-    // Não está rodando: inicia com a intervenção como primeiro input
     dialogHistory.push({ role:'user', content:val });
     const d = document.createElement('div');
     d.className = 'line intervencao';
@@ -1134,7 +1172,6 @@ function intervene() {
     scrollDown(dialogOut);
     startDialog();
   } else {
-    // Já rodando: agenda pra próximo turno
     pendingIntervene = val;
     addLine(dialogOut, 'system', `$ [FILA] Sua mensagem será inserida no próximo turno.`);
   }
