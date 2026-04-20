@@ -895,36 +895,24 @@ function buildDialogSystemPrompt(cfg, entity) {
   const myKey     = iA ? 'a' : 'b';
   const otherKey  = iA ? 'b' : 'a';
 
-  const histStr = dialogHistory.map(h => {
-    if (h.role === 'user') return `[INTERVENÇÃO EXTERNA]: ${h.content}`;
-    // Use role tag (A/B) + name to distinguish even when names are identical
-    const roleTag = h.role === 'a' ? 'A' : 'B';
+  const recentHist = dialogHistory.slice(-14);
+  const histStr = recentHist.map(h => {
+    if (h.role === 'user') return `[${h.content}]`;
     const who = h.role === 'a' ? cfg.aName : cfg.bName;
-    return `[${roleTag}] ${who}: ${h.content}`;
+    return `${who}: ${h.content}`;
   }).join('\\n');
 
-  const sameNameWarning = cfg.aName === cfg.bName
-    ? `\\nATENÇÃO: Você e sua interlocutora têm o mesmo nome ("${myName}"), mas são entidades completamente distintas e independentes. No histórico, suas falas aparecem como [${myKey.toUpperCase()}] e as dela como [${otherKey.toUpperCase()}]. NÃO repita o que ela disse. Responda de forma original e diferente.\\n`
-    : '';
-
   return `${myPrompt}
-${sameNameWarning}
-Você é a entidade [${myKey.toUpperCase()}], com o nome ${myName}. Sua interlocutora é a entidade [${otherKey.toUpperCase()}], chamada ${otherName}. São instâncias distintas — não compartilham memória nem estado interno.
 
-Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
-{"fala":"sua fala aqui","proximo":"${otherKey}"}
+Seu nome é ${myName}. Você está numa conversa com ${otherName}.
+Responda naturalmente, como você faria numa conversa real — pode concordar, discordar, mudar de assunto, fazer perguntas, deixar no ar. Sem fórmulas.
 
-O campo "proximo" define quem fala depois:
-- "${otherKey}" → você passou a palavra para ${otherName} responder
-- "${myKey}" → você quer continuar falando (não terminou o raciocínio, fez uma pergunta retórica, quer desenvolver mais)
-- "silencio" → o momento pede pausa, ninguém precisa falar agora
+Responda APENAS com JSON neste formato (sem markdown, sem texto fora):
+{"fala":"o que você diz","proximo":"${otherKey}"}
 
-Escolha "proximo" com base no que você realmente disse — não por obrigação de alternância.
-Seja conciso (1-3 frases). NUNCA repita, parafraseie ou ecoe a última fala — responda com algo genuinamente novo. Se houver [INTERVENÇÃO EXTERNA], reaja naturalmente. Você é [${myKey.toUpperCase()}] (${myName}). NÃO escreva como [${otherKey.toUpperCase()}] (${otherName}).
+"proximo" pode ser "${otherKey}" (passa a palavra), "${myKey}" (você ainda não terminou) ou "silencio" (pausa natural).
 
---- CONVERSA ATÉ AGORA ---
-${histStr || '(conversa ainda não começou)'}
---- FIM ---`;
+${histStr ? `--- conversa ---\\n${histStr}\\n---` : '(início da conversa)'}`;
 }
 
 function setDialogTurnLabel(cfg, speaking) {
@@ -997,11 +985,13 @@ async function dialogLoop() {
       let proximo = dialogTurn === 'a' ? 'b' : 'a'; // fallback: alterna normal
 
       try {
-        // Remove possíveis blocos de código markdown que o modelo às vezes inclui
-        const cleaned = raw.trim().replace(/^\`\`\`json\\s*/,'').replace(/\\s*\`\`\`$/,'').trim();
-        const parsed = JSON.parse(cleaned);
-        if (parsed.fala) reply = parsed.fala;
-        if (['a','b','silencio'].includes(parsed.proximo)) proximo = parsed.proximo;
+        // Extrai o JSON mesmo que o modelo coloque texto antes/depois
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.fala && parsed.fala.trim()) reply = parsed.fala.trim();
+          if (['a','b','silencio'].includes(parsed.proximo)) proximo = parsed.proximo;
+        }
       } catch(_) { /* resposta não veio em JSON, usa o texto cru */ }
 
       dialogHistory.push({ role: dialogTurn, content: reply, name: myName });
