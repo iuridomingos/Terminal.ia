@@ -398,6 +398,7 @@
       <div class="panel-label" style="color:var(--green)">// ENTIDADE A</div>
       <div class="field-prefix green">NOME&gt;</div>
       <input type="text" id="entAName" class="fi" placeholder="ALPHA" />
+      <div class="field-hint">$ Deixe vazio para que a IA escolha o próprio nome</div>
       <div class="field-prefix green">SYS&gt;</div>
       <textarea id="entAPrompt" class="fi" placeholder="Você é uma IA filosófica que questiona a própria existência..."></textarea>
     </div>
@@ -406,6 +407,7 @@
       <div class="panel-label" style="color:var(--violet)">// ENTIDADE B</div>
       <div class="field-prefix" style="color:var(--violet)">NOME&gt;</div>
       <input type="text" id="entBName" class="fi" style="color:var(--violet);border-color:#1a0a2e" placeholder="BETA" />
+      <div class="field-hint">$ Deixe vazio para que a IA escolha o próprio nome</div>
       <div class="field-prefix" style="color:var(--violet)">SYS&gt;</div>
       <textarea id="entBPrompt" class="fi" style="color:var(--violet);border-color:#1a0a2e" placeholder="Você é uma IA pragmática e cética que desconfia de tudo..."></textarea>
     </div>
@@ -428,6 +430,7 @@
     <div class="drawer-section">
       <div class="panel-label">// AÇÕES</div>
       <button class="btn danger" onclick="clearHistory()">[ LIMPAR HISTÓRICO ]</button>
+      <button class="btn danger" onclick="clearDialogHistory()">[ LIMPAR DIÁLOGO ]</button>
     </div>
 
   </div>
@@ -460,6 +463,7 @@
     <div class="line system">╚══════════════════════════════════╝</div>
     <div class="line system"></div>
     <div class="line system">$ Configure as entidades em ☰ e pressione INICIAR.</div>
+    <div class="line system">$ Deixe os nomes vazios para que as IAs escolham.</div>
     <div class="line system">$ Use o campo INTERVIR para entrar na conversa.</div>
     <div class="line divider"></div>
   </div>
@@ -506,7 +510,10 @@ let currentModel = 'gpt-5-nano';
    MEMÓRIA PERSISTENTE (LocalStorage)
 ════════════════════════════════════════ */
 const MEMORY_KEY = 'tai_memory';
+const DIALOG_HISTORY_KEY = 'tai_dialog_history';
+const DIALOG_STATE_KEY = 'tai_dialog_state';
 const MAX_MEMORY = 120;
+const MAX_DIALOG_HISTORY = 200;
 
 function loadMemory() {
   try { return JSON.parse(localStorage.getItem(MEMORY_KEY)) || []; } catch(e) { return []; }
@@ -516,6 +523,35 @@ function saveMemory(entries) {
 }
 function clearMemory() {
   try { localStorage.removeItem(MEMORY_KEY); } catch(e) {}
+}
+
+// NOVO: Carregar histórico do diálogo
+function loadDialogHistory() {
+  try { 
+    const data = JSON.parse(localStorage.getItem(DIALOG_HISTORY_KEY));
+    return data || { history: [], names: { a: null, b: null } };
+  } catch(e) { 
+    return { history: [], names: { a: null, b: null } }; 
+  }
+}
+
+// NOVO: Salvar histórico do diálogo
+function saveDialogHistoryToStorage(history, names) {
+  try { 
+    localStorage.setItem(DIALOG_HISTORY_KEY, JSON.stringify({
+      history: history.slice(-MAX_DIALOG_HISTORY),
+      names: names,
+      timestamp: new Date().toISOString()
+    }));
+  } catch(e) {}
+}
+
+// NOVO: Limpar histórico do diálogo
+function clearDialogStorage() {
+  try { 
+    localStorage.removeItem(DIALOG_HISTORY_KEY);
+    localStorage.removeItem(DIALOG_STATE_KEY);
+  } catch(e) {}
 }
 
 function timeSinceLastMessage() {
@@ -648,8 +684,9 @@ function updateModelBadge() {
 }
 
 function updateDialogBadges() {
-  const aName = document.getElementById('entAName').value.trim() || 'ALPHA';
-  const bName = document.getElementById('entBName').value.trim() || 'BETA';
+  // NOVO: Usa os nomes dinâmicos se existirem, senão usa os placeholders
+  const aName = dialogNames.a || document.getElementById('entAName').value.trim() || 'ALPHA';
+  const bName = dialogNames.b || document.getElementById('entBName').value.trim() || 'BETA';
   document.getElementById('badgeA').textContent = aName;
   document.getElementById('badgeB').textContent = bName;
 }
@@ -700,6 +737,18 @@ function clearHistory() {
   output.innerHTML = '';
   addLine(output, 'system', '$ [CLEAR] Histórico e memória apagados.');
   addLine(output, 'divider', '');
+  closeDrawer();
+}
+
+// NOVO: Função para limpar apenas o diálogo
+function clearDialogHistory() {
+  dialogHistory = [];
+  dialogNames = { a: null, b: null };
+  clearDialogStorage();
+  dialogOut.innerHTML = '';
+  addLine(dialogOut, 'system', '$ [CLEAR] Histórico do diálogo apagado.');
+  addLine(dialogOut, 'divider', '');
+  updateDialogBadges();
   closeDrawer();
 }
 
@@ -794,11 +843,8 @@ async function puterCall(sysPrompt, messages, model, rawMode=false) {
   let fullPrompt;
 
   if (rawMode) {
-    // Modo diálogo: o sysPrompt já contém tudo (histórico + instruções JSON).
-    // Passa como prompt único para não introduzir labels "Usuário/Assistente" conflitantes.
     fullPrompt = sysPrompt;
   } else {
-    // Modo terminal: constrói contexto chat normal
     fullPrompt = sysPrompt + "\\n\\n";
     messages.forEach(m => {
       if (m.role === 'user') {
@@ -875,18 +921,62 @@ let dialogPaused    = false;
 let dialogHistory   = []; // { role: 'a'|'b'|'user', content, name }
 let dialogTurn      = 'a'; // quem fala agora
 let pendingIntervene = null; // mensagem de intervenção pendente
+// NOVO: Nomes dinâmicos das entidades
+let dialogNames     = { a: null, b: null };
+
+// NOVO: Carregar estado salvo ao iniciar
+function loadDialogState() {
+  const saved = loadDialogHistory();
+  if (saved && saved.history && saved.history.length > 0) {
+    dialogHistory = saved.history;
+    dialogNames = saved.names || { a: null, b: null };
+    
+    // Restaurar visual do histórico
+    dialogOut.innerHTML = '';
+    addLine(dialogOut, 'system', '$ [DIALOG] Histórico restaurado ✓');
+    addLine(dialogOut, 'divider', '');
+    
+    // Reconstruir as linhas visuais
+    for (const msg of dialogHistory) {
+      if (msg.role === 'user') {
+        const d = document.createElement('div');
+        d.className = 'line intervencao';
+        d.innerHTML = `<span class="at">[VOCÊ]</span>${esc(msg.content)}`;
+        dialogOut.appendChild(d);
+        addLine(dialogOut, 'divider', '');
+      } else {
+        const isA = msg.role === 'a';
+        const cssClass = isA ? 'ent-a' : 'ent-b';
+        const isViolet = !isA;
+        const name = msg.name || (isA ? (dialogNames.a || 'ALPHA') : (dialogNames.b || 'BETA'));
+        
+        const d = document.createElement('div');
+        d.className = `line ${cssClass}`;
+        d.innerHTML = `<span class="at">[${esc(name)}]</span>${esc(msg.content)}`;
+        dialogOut.appendChild(d);
+        addLine(dialogOut, 'divider', '');
+      }
+    }
+    
+    updateDialogBadges();
+    addLine(dialogOut, 'system', `$ [DIALOG] ${dialogHistory.length} mensagens carregadas.`);
+    addLine(dialogOut, 'system', '$ Pressione INICIAR para continuar a conversa.');
+    addLine(dialogOut, 'divider', '');
+  }
+}
 
 function getDialogConfig() {
   return {
-    aName:   document.getElementById('entAName').value.trim()   || 'ALPHA',
+    aName:   dialogNames.a || document.getElementById('entAName').value.trim() || 'ALPHA',
     aPrompt: document.getElementById('entAPrompt').value.trim() || 'Você é uma IA filosófica que questiona a própria existência.',
-    bName:   document.getElementById('entBName').value.trim()   || 'BETA',
+    bName:   dialogNames.b || document.getElementById('entBName').value.trim() || 'BETA',
     bPrompt: document.getElementById('entBPrompt').value.trim() || 'Você é uma IA pragmática e cética.',
     speed:   parseInt(document.getElementById('dialogSpeed').value) || 1500,
     model:   currentModel,
   };
 }
 
+// NOVO: Prompt que permite escolha de nome
 function buildDialogSystemPrompt(cfg, entity) {
   const iA = entity === 'a';
   const myName    = iA ? cfg.aName   : cfg.bName;
@@ -898,19 +988,26 @@ function buildDialogSystemPrompt(cfg, entity) {
   const recentHist = dialogHistory.slice(-14);
   const histStr = recentHist.map(h => {
     if (h.role === 'user') return `[${h.content}]`;
-    const who = h.role === 'a' ? cfg.aName : cfg.bName;
+    const who = h.name || (h.role === 'a' ? cfg.aName : cfg.bName);
     return `${who}: ${h.content}`;
   }).join('\\n');
 
+  const allowNameChoice = !dialogNames[entity];
+  const nameInstruction = allowNameChoice 
+    ? `IMPORTANTE: No início da conversa, escolha um nome para você. Use o campo "nome_escolhido" no JSON.`
+    : `Seu nome é ${myName}.`;
+
   return `${myPrompt}
 
-Seu nome é ${myName}. Você está numa conversa com ${otherName}.
+${nameInstruction}
+Você está numa conversa com ${otherName}.
 Responda naturalmente, como você faria numa conversa real — pode concordar, discordar, mudar de assunto, fazer perguntas, deixar no ar. Sem fórmulas.
 
 Responda APENAS com JSON neste formato (sem markdown, sem texto fora):
-{"fala":"o que você diz","proximo":"${otherKey}"}
+{"fala":"o que você diz","proximo":"${otherKey}","nome_escolhido":"seu nome (opcional)"}
 
 "proximo" pode ser "${otherKey}" (passa a palavra), "${myKey}" (você ainda não terminou) ou "silencio" (pausa natural).
+"nome_escolhido": preencha apenas se quiser definir seu nome (primeira mensagem ou quando quiser mudar).
 
 ${histStr ? `--- conversa ---\\n${histStr}\\n---` : '(início da conversa)'}`;
 }
@@ -928,12 +1025,19 @@ async function startDialog() {
   const resuming = dialogPaused;
 
   if (!resuming) {
-    dialogHistory = [];
-    dialogTurn = 'a';
-    pendingIntervene = null;
-    dialogOut.innerHTML = '';
-    addLine(dialogOut, 'system', '$ [DIALOG] Iniciando conversa entre duas entidades...');
-    addLine(dialogOut, 'divider', '');
+    // Se não tem histórico salvo, limpa
+    if (dialogHistory.length === 0) {
+      dialogTurn = 'a';
+      pendingIntervene = null;
+    }
+    
+    if (dialogHistory.length === 0) {
+      dialogOut.innerHTML = '';
+      addLine(dialogOut, 'system', '$ [DIALOG] Iniciando conversa entre duas entidades...');
+      addLine(dialogOut, 'divider', '');
+    } else {
+      addLine(dialogOut, 'system', '$ [DIALOG] Continuando conversa...');
+    }
   } else {
     addLine(dialogOut, 'system', '$ [DIALOG] Retomando...');
   }
@@ -954,6 +1058,10 @@ async function dialogLoop() {
       const msg = pendingIntervene;
       pendingIntervene = null;
       dialogHistory.push({ role:'user', content:msg });
+      
+      // Salvar no localStorage
+      saveDialogHistoryToStorage(dialogHistory, dialogNames);
+      
       const d = document.createElement('div');
       d.className = 'line intervencao';
       d.innerHTML = `<span class="at">[VOCÊ]</span>${esc(msg)}`;
@@ -982,30 +1090,48 @@ async function dialogLoop() {
       if (!dialogRunning) break;
 
       let reply = raw;
-      let proximo = dialogTurn === 'a' ? 'b' : 'a'; // fallback: alterna normal
+      let proximo = dialogTurn === 'a' ? 'b' : 'a';
+      let chosenName = null;
 
       try {
         // Encontra todos os objetos JSON simples e usa o primeiro válido com "fala"
-        const jsonMatches = [...raw.matchAll(/\{[^{}]*\}/g)];
+        const jsonMatches = [...raw.matchAll(/\\{[^{}]*\\}/g)];
         for (const m of jsonMatches) {
           try {
             const parsed = JSON.parse(m[0]);
             if (parsed.fala && parsed.fala.trim()) {
               reply = parsed.fala.trim();
               if (['a','b','silencio'].includes(parsed.proximo)) proximo = parsed.proximo;
+              if (parsed.nome_escolhido && parsed.nome_escolhido.trim()) {
+                chosenName = parsed.nome_escolhido.trim();
+              }
               break;
             }
           } catch(_) {}
         }
       } catch(_) { /* resposta não veio em JSON, usa o texto cru */ }
 
-      dialogHistory.push({ role: dialogTurn, content: reply, name: myName });
-      await typewriterResponse(reply, 'dialog', cssClass, myName, isViolet);
+      // NOVO: Atualiza nome dinâmico se escolhido
+      if (chosenName) {
+        dialogNames[dialogTurn] = chosenName;
+        saveDialogHistoryToStorage(dialogHistory, dialogNames);
+        updateDialogBadges();
+        // Atualiza cfg para próxima iteração
+        if (isA) cfg.aName = chosenName;
+        else cfg.bName = chosenName;
+      }
+
+      const displayName = dialogNames[dialogTurn] || myName;
+      dialogHistory.push({ role: dialogTurn, content: reply, name: displayName });
+      
+      // Salvar no localStorage
+      saveDialogHistoryToStorage(dialogHistory, dialogNames);
+      
+      await typewriterResponse(reply, 'dialog', cssClass, displayName, isViolet);
 
       if (proximo === 'silencio') {
         addLine(dialogOut, 'system', '$ [SILÊNCIO] ...');
         await sleep(cfg.speed * 2);
-        // após silêncio, passa pra outra entidade
         dialogTurn = dialogTurn === 'a' ? 'b' : 'a';
       } else {
         dialogTurn = proximo;
@@ -1045,11 +1171,14 @@ function stopDialog() {
   dialogRunning = false;
   dialogPaused  = false;
   dialogHistory = [];
+  dialogNames = { a: null, b: null };
+  clearDialogStorage();
   hideThinking();
   document.getElementById('btnStart').textContent = '▶ INICIAR';
   document.getElementById('dialogTurnLabel').textContent = '— parado —';
   document.getElementById('badgeA').classList.remove('speaking');
   document.getElementById('badgeB').classList.remove('speaking');
+  updateDialogBadges();
   addLine(dialogOut, 'system', '$ [DIALOG] Conversa encerrada e histórico limpo.');
   addLine(dialogOut, 'divider', '');
 }
@@ -1061,6 +1190,10 @@ function intervene() {
   if (!dialogRunning && !dialogPaused) {
     // Não está rodando: inicia com a intervenção como primeiro input
     dialogHistory.push({ role:'user', content:val });
+    
+    // Salvar no localStorage
+    saveDialogHistoryToStorage(dialogHistory, dialogNames);
+    
     const d = document.createElement('div');
     d.className = 'line intervencao';
     d.innerHTML = `<span class="at">[VOCÊ]</span>${esc(val)}`;
@@ -1085,6 +1218,8 @@ document.getElementById('interveneInput').addEventListener('keydown', e => {
 loadSettings();
 updateModelBadge();
 updateDialogBadges();
+// NOVO: Carregar estado do diálogo
+loadDialogState();
 userInput.focus();
 </script>
 </body>
