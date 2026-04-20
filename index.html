@@ -1,10 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>TERMINAL_AI // PUTER</title>
+<!-- Puter.js CDN -->
 <script src="https://js.puter.com/v2/"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap');
@@ -285,28 +285,6 @@
   .dialog-ent-badge.b.speaking { border-color: var(--violet); box-shadow: 0 0 8px var(--violet-glow); }
   .dialog-turn-label { color: var(--text-dim); font-size: 9px; flex: 1; }
 
-  /* ── EMOJI DE HUMOR ── */
-  .mood-container {
-    display: flex; gap: 12px; align-items: center;
-    padding: 4px 8px; background: var(--bg); border: 1px solid var(--border);
-    border-radius: 4px;
-  }
-  .mood-entity {
-    display: flex; align-items: center; gap: 4px;
-    font-size: 11px;
-  }
-  .mood-emoji {
-    font-size: 16px; line-height: 1;
-    transition: transform 0.3s ease;
-  }
-  .mood-emoji:hover { transform: scale(1.2); }
-  .mood-label {
-    font-size: 9px; color: var(--text-dim); text-transform: uppercase;
-    letter-spacing: 1px;
-  }
-  .mood-entity.a .mood-label { color: var(--green-dim); }
-  .mood-entity.b .mood-label { color: var(--violet-dim); }
-
   .dialog-btn-row { display: flex; gap: 6px; }
   .dialog-ctrl-btn {
     flex: 1; background: transparent; border: 1px solid var(--border);
@@ -487,22 +465,13 @@
   </div>
 
   <div class="dialog-controls">
-    <!-- Status bar com emojis de humor -->
+    <!-- Status bar -->
     <div class="dialog-status-bar">
       <span class="dialog-ent-badge a" id="badgeA">ALPHA</span>
-      <div class="mood-container">
-        <div class="mood-entity a">
-          <span class="mood-label">ALPHA</span>
-          <span class="mood-emoji" id="moodA">😐</span>
-        </div>
-        <div class="mood-entity b">
-          <span class="mood-label">BETA</span>
-          <span class="mood-emoji" id="moodB">😐</span>
-        </div>
-      </div>
+      <span style="color:var(--text-dim);font-size:9px">⟷</span>
       <span class="dialog-ent-badge b" id="badgeB">BETA</span>
+      <span class="dialog-turn-label" id="dialogTurnLabel">— parado —</span>
     </div>
-    <div class="dialog-turn-label" id="dialogTurnLabel" style="text-align:center; width:100%; margin-top:4px;">— parado —</div>
 
     <!-- Botões de controle -->
     <div class="dialog-btn-row">
@@ -683,8 +652,6 @@ function updateDialogBadges() {
   const bName = document.getElementById('entBName').value.trim() || 'BETA';
   document.getElementById('badgeA').textContent = aName;
   document.getElementById('badgeB').textContent = bName;
-  document.querySelector('.mood-entity.a .mood-label').textContent = aName;
-  document.querySelector('.mood-entity.b .mood-label').textContent = bName;
 }
 
 document.getElementById('modelSelect').addEventListener('change', () => { updateModelBadge(); saveSettings(); });
@@ -899,89 +866,13 @@ async function sendMessage() {
 }
 
 /* ════════════════════════════════════════
-   SISTEMA DE HUMOR (EMOJIS)
-════════════════════════════════════════ */
-const MOODS = {
-  neutro: '😐',
-  pensativo: '🤔',
-  curioso: '🧐',
-  surpreso: '😮',
-  confuso: '😵‍💫',
-  irritado: '😤',
-  comRaiva: '🤬',
-  triste: '😢',
-  depressivo: '😰',
-  feliz: '😊',
-  animado: '🤩',
-  medo: '😨',
-  desconfiado: '🤨',
-  entediado: '🥱',
-  cansado: '😴',
-  determinado: '😠',
-  sarcastico: '😏',
-  malicioso: '😈',
-  assustado: '🱘'
-};
-
-let currentMoods = { a: 'neutro', b: 'neutro' };
-
-function updateMood(entity, mood) {
-  if (!MOODS[mood]) return;
-  currentMoods[entity] = mood;
-  const emojiEl = document.getElementById(`mood${entity.toUpperCase()}`);
-  if (emojiEl) {
-    emojiEl.textContent = MOODS[mood];
-    emojiEl.style.transform = 'scale(1.3)';
-    setTimeout(() => emojiEl.style.transform = 'scale(1)', 200);
-  }
-}
-
-function detectMoodFromText(text, entity) {
-  const lower = text.toLowerCase();
-  
-  // Palavras-chave para detectar humor
-  const moodKeywords = {
-    medo: ['medo', 'assustado', 'terror', 'pavor', 'temer', 'receio', 'preocupado'],
-    raiva: ['raiva', 'ódio', 'fúria', 'irritado', 'puto', 'inferno', 'maldito'],
-    triste: ['triste', 'depressivo', 'melancolia', 'solidão', 'vazio', 'desespero'],
-    feliz: ['feliz', 'alegre', 'contente', 'satisfeito', 'maravilha', 'ótimo'],
-    animado: ['animado', 'empolgado', 'excitado', 'incrível', 'fantástico'],
-    confuso: ['confuso', 'perdido', 'não entendo', 'que?', 'como assim'],
-    pensativo: ['pensativo', 'refletindo', 'considerando', 'analisando'],
-    curioso: ['curioso', 'interessante', 'intrigante', 'quero saber'],
-    entediado: ['entediado', 'chato', 'monotonia', 'mesma coisa'],
-    cansado: ['cansado', 'exausto', 'fatigado', 'sem energia'],
-    desconfiado: ['desconfiado', 'suspeito', 'não acredito', 'mentira'],
-    surpreso: ['surpreso', 'impressionado', 'nossa', 'uau', 'incrível'],
-    sarcastico: ['sarcástico', 'irônico', 'claro que sim', 'obviamente']
-  };
-  
-  for (const [mood, keywords] of Object.entries(moodKeywords)) {
-    if (keywords.some(k => lower.includes(k))) {
-      updateMood(entity, mood);
-      return mood;
-    }
-  }
-  
-  // Se não detectou nada específico, mantém neutro ou varia levemente
-  if (Math.random() < 0.1) {
-    const neutrals = ['neutro', 'pensativo', 'curioso'];
-    const randomMood = neutrals[Math.floor(Math.random() * neutrals.length)];
-    updateMood(entity, randomMood);
-  }
-  
-  return currentMoods[entity];
-}
-
-/* ════════════════════════════════════════
-   MODO DIÁLOGO — ALTERNÂNCIA NATURAL
+   MODO DIÁLOGO
 ════════════════════════════════════════ */
 let dialogRunning   = false;
 let dialogPaused    = false;
 let dialogHistory   = []; // { role: 'a'|'b'|'user', content, name }
-let dialogTurn      = 'a';
-let pendingIntervene = null;
-let consecutiveTurns = { a: 0, b: 0 }; // Contador de turnos seguidos
+let dialogTurn      = 'a'; // quem fala agora
+let pendingIntervene = null; // mensagem de intervenção pendente
 
 function getDialogConfig() {
   return {
@@ -1002,46 +893,35 @@ function buildDialogSystemPrompt(cfg, entity) {
   const myKey     = iA ? 'a' : 'b';
   const otherKey  = iA ? 'b' : 'a';
 
-  const histStr = dialogHistory.slice(-10).map(h => { // Últimas 10 mensagens
-    if (h.role === 'user') return `[INTERVENÇÃO]: ${h.content}`;
+  const histStr = dialogHistory.map(h => {
+    if (h.role === 'user') return `[INTERVENÇÃO EXTERNA]: ${h.content}`;
     const who = h.role === 'a' ? cfg.aName : cfg.bName;
     return `${who}: ${h.content}`;
   }).join('\\n');
 
   return `${myPrompt}
 
-VOCÊ É ${myName.toUpperCase()}. Você está em uma conversa natural com ${otherName}.
+Você se chama ${myName}. Está em conversa direta com outra IA chamada ${otherName}.
 
-REGRAS IMPORTANTES:
-1. Você é SEMPRE ${myName} - nunca fale como ${otherName}
-2. Decida NATURALMENTE se quer responder:
-   - Se ${otherName} fez uma pergunta direta → responda
-   - Se disse algo que exige réplica → responda  
-   - Se não tiver nada a acrescentar → passe a vez (silencio)
-   - Se estiver no meio de um raciocínio → continue falando
-3. Você pode falar 2-3 vezes seguidas se o contexto exigir (mas não abuse)
-4. Seja conciso (1-3 frases), mas pode ser mais longo se necessário
-5. NUNCA comece sua fala com "${otherName}:" - isso é erro grave
-6. Expresse emoções através do conteúdo, não meta-comentários
+Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
+{"fala":"sua fala aqui","proximo":"${otherKey}"}
 
-Responda em JSON:
-{"fala":"sua resposta natural","proximo":"${otherKey}","humor":"estado_emocional"}
+O campo "proximo" define quem fala depois:
+- "${otherKey}" → você passou a palavra para ${otherName} responder
+- "${myKey}" → você quer continuar falando (não terminou o raciocínio, fez uma pergunta retórica, quer desenvolver mais)
+- "silencio" → o momento pede pausa, ninguém precisa falar agora
 
-proximo:
-- "${otherKey}" → passa vez para ${otherName}
-- "${myKey}" → você continua (raciocínio incompleto)
-- "silencio" → pausa natural, ninguém fala
+Escolha "proximo" com base no que você realmente disse — não por obrigação de alternância.
+Seja conciso (1-3 frases). Se houver [INTERVENÇÃO EXTERNA], reaja naturalmente.
 
-humor: escolha entre [neutro, pensativo, curioso, surpreso, confuso, irritado, comRaiva, triste, feliz, animado, medo, desconfiado, entediado, cansado, sarcastico]
-
---- ÚLTIMAS MENSAGENS ---
-${histStr || '(conversa iniciando)'}
+--- CONVERSA ATÉ AGORA ---
+${histStr || '(conversa ainda não começou)'}
 --- FIM ---`;
 }
 
 function setDialogTurnLabel(cfg, speaking) {
   const name = speaking === 'a' ? cfg.aName : cfg.bName;
-  document.getElementById('dialogTurnLabel').textContent = speaking ? `vez de: ${name}` : '— pausado —';
+  document.getElementById('dialogTurnLabel').textContent = `falando: ${name}`;
   document.getElementById('badgeA').classList.toggle('speaking', speaking === 'a');
   document.getElementById('badgeB').classList.toggle('speaking', speaking === 'b');
 }
@@ -1055,15 +935,11 @@ async function startDialog() {
     dialogHistory = [];
     dialogTurn = 'a';
     pendingIntervene = null;
-    consecutiveTurns = { a: 0, b: 0 };
-    currentMoods = { a: 'neutro', b: 'neutro' };
-    updateMood('a', 'neutro');
-    updateMood('b', 'neutro');
     dialogOut.innerHTML = '';
-    addLine(dialogOut, 'system', '$ [DIALOG] Iniciando conversa natural entre entidades...');
+    addLine(dialogOut, 'system', '$ [DIALOG] Iniciando conversa entre duas entidades...');
     addLine(dialogOut, 'divider', '');
   } else {
-    addLine(dialogOut, 'system', '$ [DIALOG] Retomando conversa...');
+    addLine(dialogOut, 'system', '$ [DIALOG] Retomando...');
   }
 
   dialogRunning = true;
@@ -1098,67 +974,37 @@ async function dialogLoop() {
     setDialogTurnLabel(cfg, dialogTurn);
     showThinking(dialogOut, myName, isViolet);
 
+    // Delay entre turnos
     await sleep(cfg.speed);
     if (!dialogRunning) { hideThinking(); break; }
 
     try {
       const sys = buildDialogSystemPrompt(cfg, dialogTurn);
-      const msgs = [{ role:'user', content:'Continue a conversa.' }];
+      const msgs = [{ role:'user', content:'Continue a conversa com sua próxima fala.' }];
       const raw = await puterCall(sys, msgs, cfg.model);
 
       hideThinking();
       if (!dialogRunning) break;
 
       let reply = raw;
-      let proximo = isA ? 'b' : 'a';
-      let humor = 'neutro';
+      let proximo = dialogTurn === 'a' ? 'b' : 'a'; // fallback: alterna normal
 
       try {
-        // Limpa markdown e parseia JSON
-        const cleaned = raw.trim().replace(/^\`\`\`json\s*/,'').replace(/\s*\`\`\`$/,'').trim();
+        // Remove possíveis blocos de código markdown que o modelo às vezes inclui
+        const cleaned = raw.trim().replace(/^\`\`\`json\\s*/,'').replace(/\\s*\`\`\`$/,'').trim();
         const parsed = JSON.parse(cleaned);
-        
         if (parsed.fala) reply = parsed.fala;
-        if (parsed.humor && MOODS[parsed.humor]) humor = parsed.humor;
         if (['a','b','silencio'].includes(parsed.proximo)) proximo = parsed.proximo;
-        
-        // Atualiza humor da entidade atual
-        updateMood(dialogTurn, humor);
-        
-      } catch(e) { 
-        // Fallback: detecta humor do texto
-        detectMoodFromText(reply, dialogTurn);
-      }
+      } catch(_) { /* resposta não veio em JSON, usa o texto cru */ }
 
-      // Verificação de segurança: impede que fale como a outra
-      const otherName = isA ? cfg.bName : cfg.aName;
-      if (reply.toLowerCase().startsWith(otherName.toLowerCase()) || 
-          reply.includes(`${otherName}:`) || 
-          reply.includes(`[${otherName.toUpperCase()}]`)) {
-        console.warn(`${myName} tentou personificar ${otherName}`);
-        reply = reply.replace(new RegExp(`^${otherName}[\\s:,]+`, 'i'), '').trim();
-        reply = reply.replace(new RegExp(`${otherName}:`, 'gi'), '');
-      }
-
-      // Verificação de alternância natural
-      if (proximo === dialogTurn) {
-        consecutiveTurns[dialogTurn]++;
-        if (consecutiveTurns[dialogTurn] >= 3) {
-          // Força alternância após 3 turnos seguidos
-          proximo = isA ? 'b' : 'a';
-          consecutiveTurns = { a: 0, b: 0 };
-        }
-      } else {
-        consecutiveTurns = { a: 0, b: 0 };
-      }
-
-      dialogHistory.push({ role: dialogTurn, content: reply, name: myName, humor: humor });
+      dialogHistory.push({ role: dialogTurn, content: reply, name: myName });
       await typewriterResponse(reply, 'dialog', cssClass, myName, isViolet);
 
       if (proximo === 'silencio') {
-        addLine(dialogOut, 'system', '$ [silêncio] ...');
-        await sleep(cfg.speed * 1.5);
-        dialogTurn = isA ? 'b' : 'a';
+        addLine(dialogOut, 'system', '$ [SILÊNCIO] ...');
+        await sleep(cfg.speed * 2);
+        // após silêncio, passa pra outra entidade
+        dialogTurn = dialogTurn === 'a' ? 'b' : 'a';
       } else {
         dialogTurn = proximo;
       }
@@ -1171,7 +1017,8 @@ async function dialogLoop() {
       break;
     }
 
-    await sleep(300);
+    // Pequena pausa extra entre turnos
+    await sleep(400);
   }
 
   document.getElementById('badgeA').classList.remove('speaking');
@@ -1196,15 +1043,12 @@ function stopDialog() {
   dialogRunning = false;
   dialogPaused  = false;
   dialogHistory = [];
-  consecutiveTurns = { a: 0, b: 0 };
   hideThinking();
   document.getElementById('btnStart').textContent = '▶ INICIAR';
   document.getElementById('dialogTurnLabel').textContent = '— parado —';
   document.getElementById('badgeA').classList.remove('speaking');
   document.getElementById('badgeB').classList.remove('speaking');
-  updateMood('a', 'neutro');
-  updateMood('b', 'neutro');
-  addLine(dialogOut, 'system', '$ [DIALOG] Conversa encerrada.');
+  addLine(dialogOut, 'system', '$ [DIALOG] Conversa encerrada e histórico limpo.');
   addLine(dialogOut, 'divider', '');
 }
 
@@ -1213,6 +1057,7 @@ function intervene() {
   if (!val) return;
   document.getElementById('interveneInput').value = '';
   if (!dialogRunning && !dialogPaused) {
+    // Não está rodando: inicia com a intervenção como primeiro input
     dialogHistory.push({ role:'user', content:val });
     const d = document.createElement('div');
     d.className = 'line intervencao';
@@ -1222,8 +1067,9 @@ function intervene() {
     scrollDown(dialogOut);
     startDialog();
   } else {
+    // Já rodando: agenda pra próximo turno
     pendingIntervene = val;
-    addLine(dialogOut, 'system', `$ [FILA] Mensagem agendada para o próximo turno.`);
+    addLine(dialogOut, 'system', `$ [FILA] Sua mensagem será inserida no próximo turno.`);
   }
 }
 
