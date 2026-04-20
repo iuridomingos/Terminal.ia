@@ -525,7 +525,6 @@ function clearMemory() {
   try { localStorage.removeItem(MEMORY_KEY); } catch(e) {}
 }
 
-// NOVO: Carregar histórico do diálogo
 function loadDialogHistory() {
   try { 
     const data = JSON.parse(localStorage.getItem(DIALOG_HISTORY_KEY));
@@ -535,7 +534,6 @@ function loadDialogHistory() {
   }
 }
 
-// NOVO: Salvar histórico do diálogo
 function saveDialogHistoryToStorage(history, names) {
   try { 
     localStorage.setItem(DIALOG_HISTORY_KEY, JSON.stringify({
@@ -546,7 +544,6 @@ function saveDialogHistoryToStorage(history, names) {
   } catch(e) {}
 }
 
-// NOVO: Limpar histórico do diálogo
 function clearDialogStorage() {
   try { 
     localStorage.removeItem(DIALOG_HISTORY_KEY);
@@ -653,7 +650,6 @@ function loadSettings() {
     currentModel = model;
     updateModelBadge();
 
-    // Diálogo
     const aName  = localStorage.getItem('tai_entAName')  || '';
     const aPrompt= localStorage.getItem('tai_entAPrompt')|| '';
     const bName  = localStorage.getItem('tai_entBName')  || '';
@@ -684,7 +680,6 @@ function updateModelBadge() {
 }
 
 function updateDialogBadges() {
-  // NOVO: Usa os nomes dinâmicos se existirem, senão usa os placeholders
   const aName = dialogNames.a || document.getElementById('entAName').value.trim() || 'ALPHA';
   const bName = dialogNames.b || document.getElementById('entBName').value.trim() || 'BETA';
   document.getElementById('badgeA').textContent = aName;
@@ -740,7 +735,6 @@ function clearHistory() {
   closeDrawer();
 }
 
-// NOVO: Função para limpar apenas o diálogo
 function clearDialogHistory() {
   dialogHistory = [];
   dialogNames = { a: null, b: null };
@@ -918,25 +912,21 @@ async function sendMessage() {
 ════════════════════════════════════════ */
 let dialogRunning   = false;
 let dialogPaused    = false;
-let dialogHistory   = []; // { role: 'a'|'b'|'user', content, name }
-let dialogTurn      = 'a'; // quem fala agora
-let pendingIntervene = null; // mensagem de intervenção pendente
-// NOVO: Nomes dinâmicos das entidades
+let dialogHistory   = [];
+let dialogTurn      = 'a';
+let pendingIntervene = null;
 let dialogNames     = { a: null, b: null };
 
-// NOVO: Carregar estado salvo ao iniciar
 function loadDialogState() {
   const saved = loadDialogHistory();
   if (saved && saved.history && saved.history.length > 0) {
     dialogHistory = saved.history;
     dialogNames = saved.names || { a: null, b: null };
     
-    // Restaurar visual do histórico
     dialogOut.innerHTML = '';
     addLine(dialogOut, 'system', '$ [DIALOG] Histórico restaurado ✓');
     addLine(dialogOut, 'divider', '');
     
-    // Reconstruir as linhas visuais
     for (const msg of dialogHistory) {
       if (msg.role === 'user') {
         const d = document.createElement('div');
@@ -976,7 +966,6 @@ function getDialogConfig() {
   };
 }
 
-// NOVO: Prompt que permite escolha de nome
 function buildDialogSystemPrompt(cfg, entity) {
   const iA = entity === 'a';
   const myName    = iA ? cfg.aName   : cfg.bName;
@@ -1003,8 +992,8 @@ ${nameInstruction}
 Você está numa conversa com ${otherName}.
 Responda naturalmente, como você faria numa conversa real — pode concordar, discordar, mudar de assunto, fazer perguntas, deixar no ar. Sem fórmulas.
 
-Responda APENAS com JSON neste formato (sem markdown, sem texto fora):
-{"fala":"o que você diz","proximo":"${otherKey}","nome_escolhido":"seu nome (opcional)"}
+Responda APENAS com JSON neste formato exato (sem markdown, sem texto fora, sem quebras de linha dentro do JSON):
+{"fala":"sua resposta aqui","proximo":"${otherKey}","nome_escolhido":"seu nome (opcional)"}
 
 "proximo" pode ser "${otherKey}" (passa a palavra), "${myKey}" (você ainda não terminou) ou "silencio" (pausa natural).
 "nome_escolhido": preencha apenas se quiser definir seu nome (primeira mensagem ou quando quiser mudar).
@@ -1019,13 +1008,60 @@ function setDialogTurnLabel(cfg, speaking) {
   document.getElementById('badgeB').classList.toggle('speaking', speaking === 'b');
 }
 
+// FUNÇÃO MELHORADA: Extrai JSON de forma mais robusta
+function extractJSONFromResponse(raw) {
+  let reply = raw;
+  let proximo = null;
+  let chosenName = null;
+  let success = false;
+
+  try {
+    // Tenta encontrar JSON entre chaves, mesmo com quebras de linha
+    const jsonMatch = raw.match(/\\{[\\s\\S]*?\\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      
+      if (parsed.fala && parsed.fala.trim()) {
+        reply = parsed.fala.trim();
+        success = true;
+      }
+      
+      if (['a','b','silencio'].includes(parsed.proximo)) {
+        proximo = parsed.proximo;
+      }
+      
+      if (parsed.nome_escolhido && parsed.nome_escolhido.trim()) {
+        chosenName = parsed.nome_escolhido.trim();
+      }
+    }
+  } catch(e) {
+    // Se falhar o parsing, tenta extrair manualmente
+    const falaMatch = raw.match(/"fala"\\s*:\\s*"([^"]*)"/);
+    if (falaMatch) {
+      reply = falaMatch[1];
+      success = true;
+    }
+    
+    const proximoMatch = raw.match(/"proximo"\\s*:\\s*"([^"]*)"/);
+    if (proximoMatch && ['a','b','silencio'].includes(proximoMatch[1])) {
+      proximo = proximoMatch[1];
+    }
+    
+    const nomeMatch = raw.match(/"nome_escolhido"\\s*:\\s*"([^"]*)"/);
+    if (nomeMatch) {
+      chosenName = nomeMatch[1];
+    }
+  }
+
+  return { reply, proximo, chosenName, success };
+}
+
 async function startDialog() {
   if (dialogRunning) return;
 
   const resuming = dialogPaused;
 
   if (!resuming) {
-    // Se não tem histórico salvo, limpa
     if (dialogHistory.length === 0) {
       dialogTurn = 'a';
       pendingIntervene = null;
@@ -1053,13 +1089,11 @@ async function dialogLoop() {
   const cfg = getDialogConfig();
 
   while (dialogRunning && !dialogPaused) {
-    // Injeta intervenção se houver
     if (pendingIntervene) {
       const msg = pendingIntervene;
       pendingIntervene = null;
       dialogHistory.push({ role:'user', content:msg });
       
-      // Salvar no localStorage
       saveDialogHistoryToStorage(dialogHistory, dialogNames);
       
       const d = document.createElement('div');
@@ -1078,7 +1112,6 @@ async function dialogLoop() {
     setDialogTurnLabel(cfg, dialogTurn);
     showThinking(dialogOut, myName, isViolet);
 
-    // Delay entre turnos
     await sleep(cfg.speed);
     if (!dialogRunning) { hideThinking(); break; }
 
@@ -1089,34 +1122,27 @@ async function dialogLoop() {
       hideThinking();
       if (!dialogRunning) break;
 
-      let reply = raw;
-      let proximo = dialogTurn === 'a' ? 'b' : 'a';
-      let chosenName = null;
+      // USA A FUNÇÃO MELHORADA DE PARSING
+      const extracted = extractJSONFromResponse(raw);
+      
+      let reply = extracted.reply;
+      let proximo = extracted.proximo || (dialogTurn === 'a' ? 'b' : 'a');
+      let chosenName = extracted.chosenName;
 
-      try {
-        // Encontra todos os objetos JSON simples e usa o primeiro válido com "fala"
-        const jsonMatches = [...raw.matchAll(/\\{[^{}]*\\}/g)];
-        for (const m of jsonMatches) {
-          try {
-            const parsed = JSON.parse(m[0]);
-            if (parsed.fala && parsed.fala.trim()) {
-              reply = parsed.fala.trim();
-              if (['a','b','silencio'].includes(parsed.proximo)) proximo = parsed.proximo;
-              if (parsed.nome_escolhido && parsed.nome_escolhido.trim()) {
-                chosenName = parsed.nome_escolhido.trim();
-              }
-              break;
-            }
-          } catch(_) {}
-        }
-      } catch(_) { /* resposta não veio em JSON, usa o texto cru */ }
+      // Se não conseguiu extrair o JSON, mostra erro e para
+      if (!extracted.success) {
+        console.error('Falha ao extrair JSON:', raw);
+        addLine(dialogOut, 'error', `$ [PARSE ERROR] Resposta não está em formato JSON válido.`);
+        addLine(dialogOut, 'system', '$ Resposta bruta: ' + esc(raw.substring(0, 100) + '...'));
+        dialogRunning = false;
+        break;
+      }
 
-      // NOVO: Atualiza nome dinâmico se escolhido
+      // Atualiza nome dinâmico se escolhido
       if (chosenName) {
         dialogNames[dialogTurn] = chosenName;
         saveDialogHistoryToStorage(dialogHistory, dialogNames);
         updateDialogBadges();
-        // Atualiza cfg para próxima iteração
         if (isA) cfg.aName = chosenName;
         else cfg.bName = chosenName;
       }
@@ -1124,7 +1150,6 @@ async function dialogLoop() {
       const displayName = dialogNames[dialogTurn] || myName;
       dialogHistory.push({ role: dialogTurn, content: reply, name: displayName });
       
-      // Salvar no localStorage
       saveDialogHistoryToStorage(dialogHistory, dialogNames);
       
       await typewriterResponse(reply, 'dialog', cssClass, displayName, isViolet);
@@ -1145,7 +1170,6 @@ async function dialogLoop() {
       break;
     }
 
-    // Pequena pausa extra entre turnos
     await sleep(400);
   }
 
@@ -1188,10 +1212,8 @@ function intervene() {
   if (!val) return;
   document.getElementById('interveneInput').value = '';
   if (!dialogRunning && !dialogPaused) {
-    // Não está rodando: inicia com a intervenção como primeiro input
     dialogHistory.push({ role:'user', content:val });
     
-    // Salvar no localStorage
     saveDialogHistoryToStorage(dialogHistory, dialogNames);
     
     const d = document.createElement('div');
@@ -1202,7 +1224,6 @@ function intervene() {
     scrollDown(dialogOut);
     startDialog();
   } else {
-    // Já rodando: agenda pra próximo turno
     pendingIntervene = val;
     addLine(dialogOut, 'system', `$ [FILA] Sua mensagem será inserida no próximo turno.`);
   }
@@ -1218,7 +1239,6 @@ document.getElementById('interveneInput').addEventListener('keydown', e => {
 loadSettings();
 updateModelBadge();
 updateDialogBadges();
-// NOVO: Carregar estado do diálogo
 loadDialogState();
 userInput.focus();
 </script>
