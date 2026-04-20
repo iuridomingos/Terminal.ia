@@ -985,12 +985,17 @@ async function dialogLoop() {
       let proximo = dialogTurn === 'a' ? 'b' : 'a'; // fallback: alterna normal
 
       try {
-        // Extrai o JSON mesmo que o modelo coloque texto antes/depois
-        const jsonMatch = raw.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (parsed.fala && parsed.fala.trim()) reply = parsed.fala.trim();
-          if (['a','b','silencio'].includes(parsed.proximo)) proximo = parsed.proximo;
+        // Encontra todos os objetos JSON simples e usa o primeiro válido com "fala"
+        const jsonMatches = [...raw.matchAll(/\{[^{}]*\}/g)];
+        for (const m of jsonMatches) {
+          try {
+            const parsed = JSON.parse(m[0]);
+            if (parsed.fala && parsed.fala.trim()) {
+              reply = parsed.fala.trim();
+              if (['a','b','silencio'].includes(parsed.proximo)) proximo = parsed.proximo;
+              break;
+            }
+          } catch(_) {}
         }
       } catch(_) { /* resposta não veio em JSON, usa o texto cru */ }
 
