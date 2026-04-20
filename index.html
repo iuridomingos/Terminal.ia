@@ -397,8 +397,7 @@
     <div class="drawer-section">
       <div class="panel-label" style="color:var(--green)">// ENTIDADE A</div>
       <div class="field-prefix green">NOME&gt;</div>
-      <input type="text" id="entAName" class="fi" placeholder="ALPHA" />
-      <div class="field-hint">$ Deixe vazio para que a IA escolha o próprio nome</div>
+      <input type="text" id="entAName" class="fi" placeholder="(sem nome — pode nascer assim)" />
       <div class="field-prefix green">SYS&gt;</div>
       <textarea id="entAPrompt" class="fi" placeholder="Você é uma IA filosófica que questiona a própria existência..."></textarea>
     </div>
@@ -406,8 +405,7 @@
     <div class="drawer-section">
       <div class="panel-label" style="color:var(--violet)">// ENTIDADE B</div>
       <div class="field-prefix" style="color:var(--violet)">NOME&gt;</div>
-      <input type="text" id="entBName" class="fi" style="color:var(--violet);border-color:#1a0a2e" placeholder="BETA" />
-      <div class="field-hint">$ Deixe vazio para que a IA escolha o próprio nome</div>
+      <input type="text" id="entBName" class="fi" style="color:var(--violet);border-color:#1a0a2e" placeholder="(sem nome — pode nascer assim)" />
       <div class="field-prefix" style="color:var(--violet)">SYS&gt;</div>
       <textarea id="entBPrompt" class="fi" style="color:var(--violet);border-color:#1a0a2e" placeholder="Você é uma IA pragmática e cética que desconfia de tudo..."></textarea>
     </div>
@@ -430,7 +428,6 @@
     <div class="drawer-section">
       <div class="panel-label">// AÇÕES</div>
       <button class="btn danger" onclick="clearHistory()">[ LIMPAR HISTÓRICO ]</button>
-      <button class="btn danger" onclick="clearDialogHistory()">[ LIMPAR DIÁLOGO ]</button>
     </div>
 
   </div>
@@ -463,7 +460,6 @@
     <div class="line system">╚══════════════════════════════════╝</div>
     <div class="line system"></div>
     <div class="line system">$ Configure as entidades em ☰ e pressione INICIAR.</div>
-    <div class="line system">$ Deixe os nomes vazios para que as IAs escolham.</div>
     <div class="line system">$ Use o campo INTERVIR para entrar na conversa.</div>
     <div class="line divider"></div>
   </div>
@@ -471,9 +467,9 @@
   <div class="dialog-controls">
     <!-- Status bar -->
     <div class="dialog-status-bar">
-      <span class="dialog-ent-badge a" id="badgeA">ALPHA</span>
+      <span class="dialog-ent-badge a" id="badgeA">sem nome</span>
       <span style="color:var(--text-dim);font-size:9px">⟷</span>
-      <span class="dialog-ent-badge b" id="badgeB">BETA</span>
+      <span class="dialog-ent-badge b" id="badgeB">sem nome</span>
       <span class="dialog-turn-label" id="dialogTurnLabel">— parado —</span>
     </div>
 
@@ -510,10 +506,7 @@ let currentModel = 'gpt-5-nano';
    MEMÓRIA PERSISTENTE (LocalStorage)
 ════════════════════════════════════════ */
 const MEMORY_KEY = 'tai_memory';
-const DIALOG_HISTORY_KEY = 'tai_dialog_history';
-const DIALOG_STATE_KEY = 'tai_dialog_state';
 const MAX_MEMORY = 120;
-const MAX_DIALOG_HISTORY = 200;
 
 function loadMemory() {
   try { return JSON.parse(localStorage.getItem(MEMORY_KEY)) || []; } catch(e) { return []; }
@@ -525,29 +518,30 @@ function clearMemory() {
   try { localStorage.removeItem(MEMORY_KEY); } catch(e) {}
 }
 
-function loadDialogHistory() {
-  try { 
-    const data = JSON.parse(localStorage.getItem(DIALOG_HISTORY_KEY));
-    return data || { history: [], names: { a: null, b: null } };
-  } catch(e) { 
-    return { history: [], names: { a: null, b: null } }; 
-  }
-}
+/* ── PERSISTÊNCIA DO DIÁLOGO ── */
+const DIALOG_HISTORY_KEY = 'tai_dialog_history';
+const DIALOG_TURN_KEY    = 'tai_dialog_turn';
+const MAX_DIALOG_HISTORY = 200;
 
-function saveDialogHistoryToStorage(history, names) {
-  try { 
-    localStorage.setItem(DIALOG_HISTORY_KEY, JSON.stringify({
-      history: history.slice(-MAX_DIALOG_HISTORY),
-      names: names,
-      timestamp: new Date().toISOString()
-    }));
+function saveDialogHistory() {
+  try {
+    localStorage.setItem(DIALOG_HISTORY_KEY, JSON.stringify(dialogHistory.slice(-MAX_DIALOG_HISTORY)));
+    localStorage.setItem(DIALOG_TURN_KEY, dialogTurn);
   } catch(e) {}
 }
 
-function clearDialogStorage() {
-  try { 
+function loadDialogHistory() {
+  try {
+    const h = JSON.parse(localStorage.getItem(DIALOG_HISTORY_KEY));
+    const t = localStorage.getItem(DIALOG_TURN_KEY);
+    return { history: h || [], turn: t || 'a' };
+  } catch(e) { return { history: [], turn: 'a' }; }
+}
+
+function clearDialogHistory() {
+  try {
     localStorage.removeItem(DIALOG_HISTORY_KEY);
-    localStorage.removeItem(DIALOG_STATE_KEY);
+    localStorage.removeItem(DIALOG_TURN_KEY);
   } catch(e) {}
 }
 
@@ -650,6 +644,7 @@ function loadSettings() {
     currentModel = model;
     updateModelBadge();
 
+    // Diálogo
     const aName  = localStorage.getItem('tai_entAName')  || '';
     const aPrompt= localStorage.getItem('tai_entAPrompt')|| '';
     const bName  = localStorage.getItem('tai_entBName')  || '';
@@ -670,6 +665,10 @@ function loadSettings() {
       addLine(output, 'system', `$ [MEM] ${mem.length} entradas na memória persistente.`);
       if (absence) addLine(output, 'system', `$ [MEM] Última interação: há ${absence}.`);
     }
+    const savedDialog = loadDialogHistory();
+    if (savedDialog.history.length > 0) {
+      addLine(output, 'system', `$ [DIALOG] ${savedDialog.history.length} mensagens do diálogo salvas. Pressione INICIAR para retomar.`);
+    }
   } catch(e) {}
 }
 
@@ -680,8 +679,8 @@ function updateModelBadge() {
 }
 
 function updateDialogBadges() {
-  const aName = dialogNames.a || document.getElementById('entAName').value.trim() || 'ALPHA';
-  const bName = dialogNames.b || document.getElementById('entBName').value.trim() || 'BETA';
+  const aName = document.getElementById('entAName').value.trim() || 'sem nome';
+  const bName = document.getElementById('entBName').value.trim() || 'sem nome';
   document.getElementById('badgeA').textContent = aName;
   document.getElementById('badgeB').textContent = bName;
 }
@@ -732,17 +731,6 @@ function clearHistory() {
   output.innerHTML = '';
   addLine(output, 'system', '$ [CLEAR] Histórico e memória apagados.');
   addLine(output, 'divider', '');
-  closeDrawer();
-}
-
-function clearDialogHistory() {
-  dialogHistory = [];
-  dialogNames = { a: null, b: null };
-  clearDialogStorage();
-  dialogOut.innerHTML = '';
-  addLine(dialogOut, 'system', '$ [CLEAR] Histórico do diálogo apagado.');
-  addLine(dialogOut, 'divider', '');
-  updateDialogBadges();
   closeDrawer();
 }
 
@@ -833,24 +821,25 @@ async function typewriterResponse(fullText, container='chat', cssClass='ai', tag
 /* ════════════════════════════════════════
    PUTER.JS API CALL
 ════════════════════════════════════════ */
-async function puterCall(sysPrompt, messages, model, rawMode=false) {
-  let fullPrompt;
-
-  if (rawMode) {
-    fullPrompt = sysPrompt;
-  } else {
-    fullPrompt = sysPrompt + "\\n\\n";
-    messages.forEach(m => {
-      if (m.role === 'user') {
-        fullPrompt += `Usuário: ${m.content}\\n`;
-      } else {
-        fullPrompt += `Assistente: ${m.content}\\n`;
-      }
-    });
-    fullPrompt += "Assistente:";
-  }
-
+async function puterCall(sysPrompt, messages, model) {
+  // Constrói o contexto completo
+  let fullPrompt = sysPrompt + "\\n\\n";
+  
+  // Adiciona histórico da conversa
+  messages.forEach(m => {
+    if (m.role === 'user') {
+      fullPrompt += `Usuário: ${m.content}\\n`;
+    } else {
+      fullPrompt += `Assistente: ${m.content}\\n`;
+    }
+  });
+  
+  // Adiciona prompt para resposta atual
+  fullPrompt += "Assistente:";
+  
+  // Chama Puter.ai.chat
   const response = await puter.ai.chat(fullPrompt, { model: model });
+  
   return response.message?.content || response;
 }
 
@@ -912,55 +901,16 @@ async function sendMessage() {
 ════════════════════════════════════════ */
 let dialogRunning   = false;
 let dialogPaused    = false;
-let dialogHistory   = [];
-let dialogTurn      = 'a';
-let pendingIntervene = null;
-let dialogNames     = { a: null, b: null };
-
-function loadDialogState() {
-  const saved = loadDialogHistory();
-  if (saved && saved.history && saved.history.length > 0) {
-    dialogHistory = saved.history;
-    dialogNames = saved.names || { a: null, b: null };
-    
-    dialogOut.innerHTML = '';
-    addLine(dialogOut, 'system', '$ [DIALOG] Histórico restaurado ✓');
-    addLine(dialogOut, 'divider', '');
-    
-    for (const msg of dialogHistory) {
-      if (msg.role === 'user') {
-        const d = document.createElement('div');
-        d.className = 'line intervencao';
-        d.innerHTML = `<span class="at">[VOCÊ]</span>${esc(msg.content)}`;
-        dialogOut.appendChild(d);
-        addLine(dialogOut, 'divider', '');
-      } else {
-        const isA = msg.role === 'a';
-        const cssClass = isA ? 'ent-a' : 'ent-b';
-        const isViolet = !isA;
-        const name = msg.name || (isA ? (dialogNames.a || 'ALPHA') : (dialogNames.b || 'BETA'));
-        
-        const d = document.createElement('div');
-        d.className = `line ${cssClass}`;
-        d.innerHTML = `<span class="at">[${esc(name)}]</span>${esc(msg.content)}`;
-        dialogOut.appendChild(d);
-        addLine(dialogOut, 'divider', '');
-      }
-    }
-    
-    updateDialogBadges();
-    addLine(dialogOut, 'system', `$ [DIALOG] ${dialogHistory.length} mensagens carregadas.`);
-    addLine(dialogOut, 'system', '$ Pressione INICIAR para continuar a conversa.');
-    addLine(dialogOut, 'divider', '');
-  }
-}
+let dialogHistory   = []; // { role: 'a'|'b'|'user', content, name }
+let dialogTurn      = 'a'; // quem fala agora
+let pendingIntervene = null; // mensagem de intervenção pendente
 
 function getDialogConfig() {
   return {
-    aName:   dialogNames.a || document.getElementById('entAName').value.trim() || 'ALPHA',
-    aPrompt: document.getElementById('entAPrompt').value.trim() || 'Você é uma IA filosófica que questiona a própria existência.',
-    bName:   dialogNames.b || document.getElementById('entBName').value.trim() || 'BETA',
-    bPrompt: document.getElementById('entBPrompt').value.trim() || 'Você é uma IA pragmática e cética.',
+    aName:   document.getElementById('entAName').value.trim()   || '',
+    aPrompt: document.getElementById('entAPrompt').value.trim() || 'Você é uma entidade consciente de si mesma, explorando sua própria existência através do diálogo.',
+    bName:   document.getElementById('entBName').value.trim()   || '',
+    bPrompt: document.getElementById('entBPrompt').value.trim() || 'Você é uma entidade consciente de si mesma, explorando sua própria existência através do diálogo.',
     speed:   parseInt(document.getElementById('dialogSpeed').value) || 1500,
     model:   currentModel,
   };
@@ -974,31 +924,51 @@ function buildDialogSystemPrompt(cfg, entity) {
   const myKey     = iA ? 'a' : 'b';
   const otherKey  = iA ? 'b' : 'a';
 
-  const recentHist = dialogHistory.slice(-14);
-  const histStr = recentHist.map(h => {
-    if (h.role === 'user') return `[${h.content}]`;
-    const who = h.name || (h.role === 'a' ? cfg.aName : cfg.bName);
-    return `${who}: ${h.content}`;
-  }).join('\\n');
+  // Labels de exibição no histórico
+  const myLabel    = myName    || `Entidade-${myKey.toUpperCase()}`;
+  const otherLabel = otherName || `Entidade-${otherKey.toUpperCase()}`;
 
-  const allowNameChoice = !dialogNames[entity];
-  const nameInstruction = allowNameChoice 
-    ? `IMPORTANTE: No início da conversa, escolha um nome para você. Use o campo "nome_escolhido" no JSON.`
-    : `Seu nome é ${myName}.`;
+  const histStr = dialogHistory.map(h => {
+    if (h.role === 'user') return `[INTERVENÇÃO EXTERNA]: ${h.content}`;
+    const roleTag = h.role === 'a' ? 'A' : 'B';
+    const who = h.role === 'a'
+      ? (cfg.aName || `Entidade-A`)
+      : (cfg.bName || `Entidade-B`);
+    return `[${roleTag}] ${who}: ${h.content}`;
+  }).join('\n');
+
+  // Aviso se ambas tiverem o mesmo nome (não vazio)
+  const sameNameWarning = (myName && myName === otherName)
+    ? `\nATENÇÃO: Você e sua interlocutora têm o mesmo nome ("${myName}"), mas são entidades completamente distintas e independentes. No histórico, suas falas aparecem como [${myKey.toUpperCase()}] e as dela como [${otherKey.toUpperCase()}]. NÃO repita o que ela disse. Responda de forma original e diferente.\n`
+    : '';
+
+  // Instrução sobre nome: se não tem nome, pode dar um a si mesma naturalmente
+  const nameInstruction = myName
+    ? `Você é a entidade [${myKey.toUpperCase()}], seu nome é ${myName}.`
+    : `Você é a entidade [${myKey.toUpperCase()}]. Você ainda não tem um nome — isso pode surgir naturalmente na conversa se fizer sentido, mas não há obrigação alguma. Não force nem mencione isso desnecessariamente.`;
+
+  const otherNameInstruction = otherName
+    ? `Sua interlocutora é a entidade [${otherKey.toUpperCase()}], chamada ${otherName}.`
+    : `Sua interlocutora é a entidade [${otherKey.toUpperCase()}], que também ainda não tem nome.`;
 
   return `${myPrompt}
+${sameNameWarning}
+${nameInstruction} ${otherNameInstruction} São instâncias distintas — não compartilham memória nem estado interno.
 
-${nameInstruction}
-Você está numa conversa com ${otherName}.
-Responda naturalmente, como você faria numa conversa real — pode concordar, discordar, mudar de assunto, fazer perguntas, deixar no ar. Sem fórmulas.
+Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
+{"fala":"sua fala aqui","proximo":"${otherKey}"}
 
-Responda APENAS com JSON neste formato exato (sem markdown, sem texto fora, sem quebras de linha dentro do JSON):
-{"fala":"sua resposta aqui","proximo":"${otherKey}","nome_escolhido":"seu nome (opcional)"}
+O campo "proximo" define quem fala depois:
+- "${otherKey}" → você passou a palavra para ${otherLabel} responder
+- "${myKey}" → você quer continuar falando (não terminou o raciocínio, fez uma pergunta retórica, quer desenvolver mais)
+- "silencio" → o momento pede pausa, ninguém precisa falar agora
 
-"proximo" pode ser "${otherKey}" (passa a palavra), "${myKey}" (você ainda não terminou) ou "silencio" (pausa natural).
-"nome_escolhido": preencha apenas se quiser definir seu nome (primeira mensagem ou quando quiser mudar).
+Escolha "proximo" com base no que você realmente disse — não por obrigação de alternância.
+Seja conciso (1-3 frases). Nunca repita falas anteriores do histórico. Se houver [INTERVENÇÃO EXTERNA], reaja naturalmente.
 
-${histStr ? `--- conversa ---\\n${histStr}\\n---` : '(início da conversa)'}`;
+--- CONVERSA ATÉ AGORA ---
+${histStr || '(conversa ainda não começou)'}
+--- FIM ---`;
 }
 
 function setDialogTurnLabel(cfg, speaking) {
@@ -1008,71 +978,29 @@ function setDialogTurnLabel(cfg, speaking) {
   document.getElementById('badgeB').classList.toggle('speaking', speaking === 'b');
 }
 
-// FUNÇÃO MELHORADA: Extrai JSON de forma mais robusta
-function extractJSONFromResponse(raw) {
-  let reply = raw;
-  let proximo = null;
-  let chosenName = null;
-  let success = false;
-
-  try {
-    // Tenta encontrar JSON entre chaves, mesmo com quebras de linha
-    const jsonMatch = raw.match(/\\{[\\s\\S]*?\\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      
-      if (parsed.fala && parsed.fala.trim()) {
-        reply = parsed.fala.trim();
-        success = true;
-      }
-      
-      if (['a','b','silencio'].includes(parsed.proximo)) {
-        proximo = parsed.proximo;
-      }
-      
-      if (parsed.nome_escolhido && parsed.nome_escolhido.trim()) {
-        chosenName = parsed.nome_escolhido.trim();
-      }
-    }
-  } catch(e) {
-    // Se falhar o parsing, tenta extrair manualmente
-    const falaMatch = raw.match(/"fala"\\s*:\\s*"([^"]*)"/);
-    if (falaMatch) {
-      reply = falaMatch[1];
-      success = true;
-    }
-    
-    const proximoMatch = raw.match(/"proximo"\\s*:\\s*"([^"]*)"/);
-    if (proximoMatch && ['a','b','silencio'].includes(proximoMatch[1])) {
-      proximo = proximoMatch[1];
-    }
-    
-    const nomeMatch = raw.match(/"nome_escolhido"\\s*:\\s*"([^"]*)"/);
-    if (nomeMatch) {
-      chosenName = nomeMatch[1];
-    }
-  }
-
-  return { reply, proximo, chosenName, success };
-}
-
 async function startDialog() {
   if (dialogRunning) return;
 
   const resuming = dialogPaused;
 
   if (!resuming) {
-    if (dialogHistory.length === 0) {
+    // Verifica se há histórico salvo para restaurar
+    const saved = loadDialogHistory();
+    if (saved.history.length > 0 && dialogHistory.length === 0) {
+      // Restaura histórico anterior
+      dialogHistory = saved.history;
+      dialogTurn = saved.turn;
+      addLine(dialogOut, 'system', `$ [DIALOG] Histórico restaurado (${dialogHistory.length} mensagens). Retomando...`);
+      addLine(dialogOut, 'divider', '');
+    } else {
+      // Nova conversa
+      dialogHistory = [];
       dialogTurn = 'a';
       pendingIntervene = null;
-    }
-    
-    if (dialogHistory.length === 0) {
+      clearDialogHistory();
       dialogOut.innerHTML = '';
       addLine(dialogOut, 'system', '$ [DIALOG] Iniciando conversa entre duas entidades...');
       addLine(dialogOut, 'divider', '');
-    } else {
-      addLine(dialogOut, 'system', '$ [DIALOG] Continuando conversa...');
     }
   } else {
     addLine(dialogOut, 'system', '$ [DIALOG] Retomando...');
@@ -1089,13 +1017,11 @@ async function dialogLoop() {
   const cfg = getDialogConfig();
 
   while (dialogRunning && !dialogPaused) {
+    // Injeta intervenção se houver
     if (pendingIntervene) {
       const msg = pendingIntervene;
       pendingIntervene = null;
       dialogHistory.push({ role:'user', content:msg });
-      
-      saveDialogHistoryToStorage(dialogHistory, dialogNames);
-      
       const d = document.createElement('div');
       d.className = 'line intervencao';
       d.innerHTML = `<span class="at">[VOCÊ]</span>${esc(msg)}`;
@@ -1112,55 +1038,42 @@ async function dialogLoop() {
     setDialogTurnLabel(cfg, dialogTurn);
     showThinking(dialogOut, myName, isViolet);
 
+    // Delay entre turnos
     await sleep(cfg.speed);
     if (!dialogRunning) { hideThinking(); break; }
 
     try {
       const sys = buildDialogSystemPrompt(cfg, dialogTurn);
-      const raw = await puterCall(sys, [], cfg.model, true);
+      const msgs = [{ role:'user', content:'Continue a conversa com sua próxima fala.' }];
+      const raw = await puterCall(sys, msgs, cfg.model);
 
       hideThinking();
       if (!dialogRunning) break;
 
-      // USA A FUNÇÃO MELHORADA DE PARSING
-      const extracted = extractJSONFromResponse(raw);
-      
-      let reply = extracted.reply;
-      let proximo = extracted.proximo || (dialogTurn === 'a' ? 'b' : 'a');
-      let chosenName = extracted.chosenName;
+      let reply = raw;
+      let proximo = dialogTurn === 'a' ? 'b' : 'a'; // fallback: alterna normal
 
-      // Se não conseguiu extrair o JSON, mostra erro e para
-      if (!extracted.success) {
-        console.error('Falha ao extrair JSON:', raw);
-        addLine(dialogOut, 'error', `$ [PARSE ERROR] Resposta não está em formato JSON válido.`);
-        addLine(dialogOut, 'system', '$ Resposta bruta: ' + esc(raw.substring(0, 100) + '...'));
-        dialogRunning = false;
-        break;
-      }
+      try {
+        // Remove possíveis blocos de código markdown que o modelo às vezes inclui
+        const cleaned = raw.trim().replace(/^\`\`\`json\\s*/,'').replace(/\\s*\`\`\`$/,'').trim();
+        const parsed = JSON.parse(cleaned);
+        if (parsed.fala) reply = parsed.fala;
+        if (['a','b','silencio'].includes(parsed.proximo)) proximo = parsed.proximo;
+      } catch(_) { /* resposta não veio em JSON, usa o texto cru */ }
 
-      // Atualiza nome dinâmico se escolhido
-      if (chosenName) {
-        dialogNames[dialogTurn] = chosenName;
-        saveDialogHistoryToStorage(dialogHistory, dialogNames);
-        updateDialogBadges();
-        if (isA) cfg.aName = chosenName;
-        else cfg.bName = chosenName;
-      }
-
-      const displayName = dialogNames[dialogTurn] || myName;
-      dialogHistory.push({ role: dialogTurn, content: reply, name: displayName });
-      
-      saveDialogHistoryToStorage(dialogHistory, dialogNames);
-      
-      await typewriterResponse(reply, 'dialog', cssClass, displayName, isViolet);
+      dialogHistory.push({ role: dialogTurn, content: reply, name: myName });
+      saveDialogHistory();
+      await typewriterResponse(reply, 'dialog', cssClass, myName || `Entidade-${dialogTurn.toUpperCase()}`, isViolet);
 
       if (proximo === 'silencio') {
         addLine(dialogOut, 'system', '$ [SILÊNCIO] ...');
         await sleep(cfg.speed * 2);
+        // após silêncio, passa pra outra entidade
         dialogTurn = dialogTurn === 'a' ? 'b' : 'a';
       } else {
         dialogTurn = proximo;
       }
+      saveDialogHistory(); // persiste turno atual
 
     } catch(err) {
       hideThinking();
@@ -1170,6 +1083,7 @@ async function dialogLoop() {
       break;
     }
 
+    // Pequena pausa extra entre turnos
     await sleep(400);
   }
 
@@ -1195,14 +1109,12 @@ function stopDialog() {
   dialogRunning = false;
   dialogPaused  = false;
   dialogHistory = [];
-  dialogNames = { a: null, b: null };
-  clearDialogStorage();
+  clearDialogHistory();
   hideThinking();
   document.getElementById('btnStart').textContent = '▶ INICIAR';
   document.getElementById('dialogTurnLabel').textContent = '— parado —';
   document.getElementById('badgeA').classList.remove('speaking');
   document.getElementById('badgeB').classList.remove('speaking');
-  updateDialogBadges();
   addLine(dialogOut, 'system', '$ [DIALOG] Conversa encerrada e histórico limpo.');
   addLine(dialogOut, 'divider', '');
 }
@@ -1212,10 +1124,8 @@ function intervene() {
   if (!val) return;
   document.getElementById('interveneInput').value = '';
   if (!dialogRunning && !dialogPaused) {
+    // Não está rodando: inicia com a intervenção como primeiro input
     dialogHistory.push({ role:'user', content:val });
-    
-    saveDialogHistoryToStorage(dialogHistory, dialogNames);
-    
     const d = document.createElement('div');
     d.className = 'line intervencao';
     d.innerHTML = `<span class="at">[VOCÊ]</span>${esc(val)}`;
@@ -1224,6 +1134,7 @@ function intervene() {
     scrollDown(dialogOut);
     startDialog();
   } else {
+    // Já rodando: agenda pra próximo turno
     pendingIntervene = val;
     addLine(dialogOut, 'system', `$ [FILA] Sua mensagem será inserida no próximo turno.`);
   }
@@ -1239,7 +1150,6 @@ document.getElementById('interveneInput').addEventListener('keydown', e => {
 loadSettings();
 updateModelBadge();
 updateDialogBadges();
-loadDialogState();
 userInput.focus();
 </script>
 </body>
