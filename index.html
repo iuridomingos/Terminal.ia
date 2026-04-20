@@ -895,13 +895,19 @@ function buildDialogSystemPrompt(cfg, entity) {
 
   const histStr = dialogHistory.map(h => {
     if (h.role === 'user') return `[INTERVENÇÃO EXTERNA]: ${h.content}`;
+    // Use role tag (A/B) + name to distinguish even when names are identical
+    const roleTag = h.role === 'a' ? 'A' : 'B';
     const who = h.role === 'a' ? cfg.aName : cfg.bName;
-    return `${who}: ${h.content}`;
+    return `[${roleTag}] ${who}: ${h.content}`;
   }).join('\\n');
 
-  return `${myPrompt}
+  const sameNameWarning = cfg.aName === cfg.bName
+    ? `\\nATENÇÃO: Você e sua interlocutora têm o mesmo nome ("${myName}"), mas são entidades completamente distintas e independentes. No histórico, suas falas aparecem como [${myKey.toUpperCase()}] e as dela como [${otherKey.toUpperCase()}]. NÃO repita o que ela disse. Responda de forma original e diferente.\\n`
+    : '';
 
-Você se chama ${myName}. Está em conversa direta com outra IA chamada ${otherName}.
+  return `${myPrompt}
+${sameNameWarning}
+Você é a entidade [${myKey.toUpperCase()}], com o nome ${myName}. Sua interlocutora é a entidade [${otherKey.toUpperCase()}], chamada ${otherName}. São instâncias distintas — não compartilham memória nem estado interno.
 
 Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
 {"fala":"sua fala aqui","proximo":"${otherKey}"}
@@ -912,7 +918,7 @@ O campo "proximo" define quem fala depois:
 - "silencio" → o momento pede pausa, ninguém precisa falar agora
 
 Escolha "proximo" com base no que você realmente disse — não por obrigação de alternância.
-Seja conciso (1-3 frases). Se houver [INTERVENÇÃO EXTERNA], reaja naturalmente.
+Seja conciso (1-3 frases). Nunca repita falas anteriores do histórico. Se houver [INTERVENÇÃO EXTERNA], reaja naturalmente.
 
 --- CONVERSA ATÉ AGORA ---
 ${histStr || '(conversa ainda não começou)'}
