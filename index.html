@@ -790,25 +790,27 @@ async function typewriterResponse(fullText, container='chat', cssClass='ai', tag
 /* ════════════════════════════════════════
    PUTER.JS API CALL
 ════════════════════════════════════════ */
-async function puterCall(sysPrompt, messages, model) {
-  // Constrói o contexto completo
-  let fullPrompt = sysPrompt + "\\n\\n";
-  
-  // Adiciona histórico da conversa
-  messages.forEach(m => {
-    if (m.role === 'user') {
-      fullPrompt += `Usuário: ${m.content}\\n`;
-    } else {
-      fullPrompt += `Assistente: ${m.content}\\n`;
-    }
-  });
-  
-  // Adiciona prompt para resposta atual
-  fullPrompt += "Assistente:";
-  
-  // Chama Puter.ai.chat
+async function puterCall(sysPrompt, messages, model, rawMode=false) {
+  let fullPrompt;
+
+  if (rawMode) {
+    // Modo diálogo: o sysPrompt já contém tudo (histórico + instruções JSON).
+    // Passa como prompt único para não introduzir labels "Usuário/Assistente" conflitantes.
+    fullPrompt = sysPrompt;
+  } else {
+    // Modo terminal: constrói contexto chat normal
+    fullPrompt = sysPrompt + "\\n\\n";
+    messages.forEach(m => {
+      if (m.role === 'user') {
+        fullPrompt += `Usuário: ${m.content}\\n`;
+      } else {
+        fullPrompt += `Assistente: ${m.content}\\n`;
+      }
+    });
+    fullPrompt += "Assistente:";
+  }
+
   const response = await puter.ai.chat(fullPrompt, { model: model });
-  
   return response.message?.content || response;
 }
 
@@ -918,7 +920,7 @@ O campo "proximo" define quem fala depois:
 - "silencio" → o momento pede pausa, ninguém precisa falar agora
 
 Escolha "proximo" com base no que você realmente disse — não por obrigação de alternância.
-Seja conciso (1-3 frases). Nunca repita falas anteriores do histórico. Se houver [INTERVENÇÃO EXTERNA], reaja naturalmente.
+Seja conciso (1-3 frases). NUNCA repita, parafraseie ou ecoe a última fala — responda com algo genuinamente novo. Se houver [INTERVENÇÃO EXTERNA], reaja naturalmente. Você é [${myKey.toUpperCase()}] (${myName}). NÃO escreva como [${otherKey.toUpperCase()}] (${otherName}).
 
 --- CONVERSA ATÉ AGORA ---
 ${histStr || '(conversa ainda não começou)'}
@@ -986,8 +988,7 @@ async function dialogLoop() {
 
     try {
       const sys = buildDialogSystemPrompt(cfg, dialogTurn);
-      const msgs = [{ role:'user', content:'Continue a conversa com sua próxima fala.' }];
-      const raw = await puterCall(sys, msgs, cfg.model);
+      const raw = await puterCall(sys, [], cfg.model, true);
 
       hideThinking();
       if (!dialogRunning) break;
